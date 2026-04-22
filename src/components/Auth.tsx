@@ -34,6 +34,13 @@ export default function Auth({ onAuth }: { onAuth: (user: any, token: string) =>
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       
+      // Fetch profile to check if they already have artists (in case backend hasn't updated yet)
+      const profileRes = await fetch(`/api/users/${data.user.id}`);
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        data.user.hasOnboarded = !!profile.top_artist_1;
+      }
+      
       onAuth(data.user, data.token);
     } catch (err: any) {
       setError(err.message);
