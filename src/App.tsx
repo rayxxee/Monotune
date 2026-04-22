@@ -6,13 +6,15 @@ import ForumFeed from './components/ForumFeed';
 import ThreadDetail from './components/ThreadDetail';
 import Profile from './components/Profile';
 import AdminDash from './components/AdminDash';
-import { LogOut, Radio, User, Shield, MessageSquare, Newspaper } from 'lucide-react';
+import ChatHub from './components/ChatHub';
+import Settings from './components/Settings';
+import { LogOut, Radio, User, Shield, MessageSquare, Newspaper, Settings as SettingsIcon } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
   const [step, setStep] = useState<'AUTH' | 'ONBOARDING' | 'FEED'>('AUTH');
-  const [activeTab, setActiveTab] = useState<'DISCOVER' | 'COMMUNITY' | 'CHATS' | 'PROFILE' | 'ADMIN'>('DISCOVER');
+  const [activeTab, setActiveTab] = useState<'DISCOVER' | 'COMMUNITY' | 'CHATS' | 'PROFILE' | 'ADMIN' | 'SETTINGS'>('DISCOVER');
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -69,6 +71,12 @@ export default function App() {
             <Newspaper size={16} /> FEED
           </button>
           <button 
+            onClick={() => { setActiveTab('CHATS'); setSelectedPostId(null); }}
+            className={`flex items-center gap-2 hover:underline ${activeTab === 'CHATS' ? 'underline decoration-4 underline-offset-8' : ''}`}
+          >
+            <MessageSquare size={16} /> COMMS
+          </button>
+          <button 
             onClick={() => { setActiveTab('PROFILE'); setSelectedPostId(null); }}
             className={`flex items-center gap-2 hover:underline ${activeTab === 'PROFILE' ? 'underline decoration-4 underline-offset-8' : ''}`}
           >
@@ -82,7 +90,14 @@ export default function App() {
               <Shield size={16} /> ADMIN
             </button>
           )}
-          <button onClick={logout} title="LOGOUT" className="hover:text-cyan-600 transition-all ml-4">
+          <button 
+            onClick={() => { setActiveTab('SETTINGS'); setSelectedPostId(null); }}
+            className={`flex items-center gap-2 hover:underline ml-4 ${activeTab === 'SETTINGS' ? 'underline decoration-4 underline-offset-8' : ''}`}
+            title="SETTINGS"
+          >
+            <SettingsIcon size={18} />
+          </button>
+          <button onClick={logout} title="LOGOUT" className="hover:text-red-600 transition-all ml-4">
             <LogOut size={18} />
           </button>
         </div>
@@ -107,13 +122,10 @@ export default function App() {
             />
           )
         )}
-        {activeTab === 'CHATS' && (
-          <div className="flex-1 flex items-center justify-center font-bold uppercase tracking-widest opacity-20">
-            COMMS VIEW — UNDER CONSTRUCTION
-          </div>
-        )}
+        {activeTab === 'CHATS' && <ChatHub user={user} token={token!} />}
         {activeTab === 'PROFILE' && <Profile userId={user.id} token={token!} />}
         {activeTab === 'ADMIN' && <AdminDash user={user} token={token!} />}
+        {activeTab === 'SETTINGS' && <Settings user={user} token={token!} onLogout={logout} />}
       </main>
 
       {/* FOOTER TICKER */}

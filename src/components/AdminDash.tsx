@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Newspaper, AlertTriangle, Activity } from 'lucide-react';
+import { Shield, Users, Newspaper, AlertTriangle, Activity, UserX, Check, Trash } from 'lucide-react';
 
 export default function AdminDash({ user, token }: { user: any, token: string }) {
   const [stats, setStats] = useState<any>(null);
+  const [queue, setQueue] = useState<{posts: any[], comments: any[]}>({ posts: [], comments: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();
+    fetchQueue();
   }, []);
 
   const fetchStats = async () => {
@@ -16,9 +18,31 @@ export default function AdminDash({ user, token }: { user: any, token: string })
       setStats(data);
     } catch (err) {
       console.error('Admin stats restricted.');
+    }
+  };
+
+  const fetchQueue = async () => {
+    try {
+      const res = await fetch('/api/admin/review-queue');
+      const data = await res.json();
+      setQueue(data);
+    } catch (err) {
+      console.error('Queue error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBan = async (userId: number) => {
+    if (!confirm('INITIATE BAN SEQUENCE FOR THIS USER?')) return;
+    try {
+      await fetch('/api/admin/ban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, isBanned: true })
+      });
+      alert('USER BAN VERIFIED.');
+    } catch (e) {}
   };
 
   if (!stats) return <div className="p-12 font-black uppercase text-4xl">ACCESS DENIED :: INSUFFICIENT CLEARANCE</div>;
@@ -50,31 +74,38 @@ export default function AdminDash({ user, token }: { user: any, token: string })
            ))}
         </div>
 
-        {/* FLAGGED CONTENT LOG */}
+        {/* MANUAL REVIEW QUEUE */}
         <div className="flex flex-col gap-8 bg-white brutalist-border p-12">
            <div className="flex justify-between items-end border-b-2 border-black pb-2">
-              <h3 className="text-2xl font-black uppercase underline decoration-4 underline-offset-8">MODERATION QUEUE</h3>
-              <span className="text-xs font-bold tracking-widest opacity-40 uppercase">RECENTLY SILENCED</span>
+              <h3 className="text-2xl font-black uppercase underline decoration-4 underline-offset-8">MANUAL REVIEW QUEUE</h3>
+              <span className="text-xs font-bold tracking-widest opacity-40 uppercase">BORDERLINE CONTENT</span>
            </div>
 
            <div className="flex flex-col gap-4">
-              {stats.flagged.map((item: any) => (
-                <div key={item.id} className="brutalist-border p-6 bg-grey-silver flex flex-col gap-4">
+              {[...queue.posts, ...queue.comments].map((item: any, idx) => (
+                <div key={idx} className="brutalist-border p-6 bg-grey-silver flex flex-col gap-4">
                    <div className="flex justify-between text-[10px] font-bold tracking-widest uppercase">
-                      <span className="bg-black text-white px-2 py-1">FLAGGED: {item.username}</span>
-                      <span className="text-black">SCORE: {Math.round(item.toxicity_score * 100)}%</span>
+                      <span className="bg-yellow-400 text-black px-2 py-1 border border-black">REVIEW: {item.username}</span>
+                      <span className="text-black">AI SCORE: {Math.round(item.toxicity_score * 100)}%</span>
                    </div>
-                   <p className="text-xl font-bold uppercase strike-through opacity-50 line-through">
+                   <p className="text-xl font-bold uppercase">
                      "{item.content}"
                    </p>
-                   <div className="flex gap-4">
-                      <button className="text-[10px] font-black uppercase underline hover:no-underline">PURGE RECORD</button>
-                      <button className="text-[10px] font-black uppercase underline hover:no-underline">UNBLOCK SIGNAL</button>
+                   <div className="flex gap-4 border-t-2 border-black pt-4">
+                      <button className="flex items-center gap-1 text-[10px] font-black uppercase hover:bg-green-400 px-2 py-1 border border-transparent hover:border-black transition-all">
+                        <Check size={12}/> APPROVE
+                      </button>
+                      <button className="flex items-center gap-1 text-[10px] font-black uppercase hover:bg-red-400 px-2 py-1 border border-transparent hover:border-black transition-all">
+                        <Trash size={12}/> DELETE CONTENT
+                      </button>
+                      <button onClick={() => handleBan(item.user_id)} className="flex items-center gap-1 text-[10px] font-black uppercase hover:bg-black hover:text-white px-2 py-1 border border-transparent transition-all ml-auto">
+                        <UserX size={12}/> BAN USER
+                      </button>
                    </div>
                 </div>
               ))}
-              {stats.flagged.length === 0 && (
-                <p className="text-center py-12 font-bold uppercase opacity-20">GRID IS CLEAN. NO TOXICITY DETECTED.</p>
+              {queue.posts.length === 0 && queue.comments.length === 0 && (
+                <p className="text-center py-12 font-bold uppercase opacity-20">QUEUE IS CLEAR.</p>
               )}
            </div>
         </div>
