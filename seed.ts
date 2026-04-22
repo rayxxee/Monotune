@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import fs from 'fs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dbPath = path.join(__dirname, 'monutune.db');
@@ -10,6 +12,11 @@ const dbPath = path.join(__dirname, 'monutune.db');
 const db = new Database(dbPath);
 
 async function seed() {
+  console.log('Initializing schema...');
+  const schemaPath = path.join(__dirname, 'schema.sql');
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  db.exec(schema);
+
   console.log('Seeding database with test profiles...');
   const passwordHash = await bcrypt.hash('password123', 10);
   
