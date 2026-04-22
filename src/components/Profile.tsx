@@ -62,6 +62,14 @@ export default function Profile({ currentUser, userId, token }: { currentUser: a
     } catch (e) {}
   };
 
+  const handleSpotify = async () => {
+    try {
+      const res = await fetch('/api/auth/spotify');
+      const data = await res.json();
+      alert(`OAUTH REDIRECT TO: ${data.url} (MOCK)`);
+    } catch (e) {}
+  };
+
   if (loading) return null;
 
   const artists = [profile.top_artist_1, profile.top_artist_2, profile.top_artist_3, profile.top_artist_4, profile.top_artist_5].filter(Boolean);
@@ -86,6 +94,14 @@ export default function Profile({ currentUser, userId, token }: { currentUser: a
             <p className="text-xl font-bold uppercase text-grey-mid tracking-tight max-w-lg italic">
               "{profile.liner_notes || 'NO LINER NOTES FILED IN THE ARCHIVE.'}"
             </p>
+            {isOwnProfile && (
+              <button 
+                onClick={handleSpotify}
+                className="mt-4 brutalist-button py-3 px-6 text-xs bg-green-500 hover:bg-black hover:text-green-500 flex items-center justify-center gap-2 self-start"
+              >
+                CONNECT WITH SPOTIFY (OAUTH MOCK)
+              </button>
+            )}
             {!isOwnProfile && (
               <div className="flex gap-4 items-center border-t-2 border-black pt-4">
                  <div className="bg-black text-white px-4 py-2 font-bold uppercase tracking-widest text-xs">

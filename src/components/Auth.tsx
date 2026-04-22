@@ -7,14 +7,6 @@ export default function Auth({ onAuth }: { onAuth: (user: any, token: string) =>
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [resetSent, setResetSent] = useState(false);
 
-  const handleSpotify = async () => {
-    try {
-      const res = await fetch('/api/auth/spotify');
-      const data = await res.json();
-      alert(`OAUTH REDIRECT TO: ${data.url} (MOCK)`);
-    } catch (e) {}
-  };
-
   const handleReset = async () => {
     if (!formData.email) {
       setError('ENTER EMAIL TO RESET PASSWORD.');
@@ -96,15 +88,6 @@ export default function Auth({ onAuth }: { onAuth: (user: any, token: string) =>
             {loading ? 'PROCESSING...' : (isLogin ? 'ENTER GRID' : 'CREATE PERSONA')}
           </button>
         </form>
-
-        <div className="flex flex-col gap-4 mt-8">
-          <button 
-            onClick={handleSpotify}
-            className="brutalist-button py-4 text-sm bg-green-500 hover:bg-black hover:text-green-500 flex items-center justify-center gap-2"
-          >
-            CONNECT WITH SPOTIFY (OAUTH MOCK)
-          </button>
-        </div>
         
         <div className="mt-8 flex flex-col gap-4">
           {isLogin && (

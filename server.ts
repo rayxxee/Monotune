@@ -99,7 +99,7 @@ app.post('/api/auth/register', async (req, res) => {
     ).run(username, email, hashedPassword);
     
     const token = jwt.sign({ id: result.lastInsertRowid, username }, JWT_SECRET);
-    res.json({ token, user: { id: result.lastInsertRowid, username, email } });
+    res.json({ token, user: { id: result.lastInsertRowid, username, email, hasOnboarded: false } });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Registration failed.' });
   }
@@ -119,7 +119,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
-    res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email, hasOnboarded: !!user.top_artist_1 } });
   } catch (err: any) {
     res.status(500).json({ error: 'Login failed.' });
   }

@@ -32,7 +32,11 @@ export default function App() {
     setToken(t);
     localStorage.setItem('monutune_token', t);
     localStorage.setItem('monutune_user', JSON.stringify(u));
-    setStep('ONBOARDING');
+    if (u.hasOnboarded) {
+      setStep('FEED');
+    } else {
+      setStep('ONBOARDING');
+    }
   };
 
   const handleOnboardingComplete = () => {
@@ -123,7 +127,7 @@ export default function App() {
           )
         )}
         {activeTab === 'CHATS' && <ChatHub user={user} token={token!} />}
-        {activeTab === 'PROFILE' && <Profile userId={user.id} token={token!} />}
+        {activeTab === 'PROFILE' && <Profile currentUser={user} userId={user.id} token={token!} />}
         {activeTab === 'ADMIN' && <AdminDash user={user} token={token!} />}
         {activeTab === 'SETTINGS' && <Settings user={user} token={token!} onLogout={logout} />}
       </main>
