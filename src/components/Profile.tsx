@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Music, Users, ShieldCheck, Check, X } from 'lucide-react';
+import { User, Music, Users, ShieldCheck, Check, X, UserMinus } from 'lucide-react';
 
-export default function Profile({ userId, token }: { userId: number, token: string }) {
+export default function Profile({ currentUser, userId, token }: { currentUser: any, userId: number, token: string }) {
+  const isOwnProfile = currentUser.id === userId;
   const [profile, setProfile] = useState<any>(null);
   const [friends, setFriends] = useState<any[]>([]);
   const [pending, setPending] = useState<any[]>([]);
@@ -49,6 +50,18 @@ export default function Profile({ userId, token }: { userId: number, token: stri
     }
   };
 
+  const handleUnfriend = async () => {
+    if (!confirm('SEVER CONNECTION?')) return;
+    try {
+      await fetch('/api/friendships/unfriend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId1: currentUser.id, userId2: userId })
+      });
+      alert('CONNECTION SEVERED.');
+    } catch (e) {}
+  };
+
   if (loading) return null;
 
   const artists = [profile.top_artist_1, profile.top_artist_2, profile.top_artist_3, profile.top_artist_4, profile.top_artist_5].filter(Boolean);
@@ -73,6 +86,16 @@ export default function Profile({ userId, token }: { userId: number, token: stri
             <p className="text-xl font-bold uppercase text-grey-mid tracking-tight max-w-lg italic">
               "{profile.liner_notes || 'NO LINER NOTES FILED IN THE ARCHIVE.'}"
             </p>
+            {!isOwnProfile && (
+              <div className="flex gap-4 items-center border-t-2 border-black pt-4">
+                 <div className="bg-black text-white px-4 py-2 font-bold uppercase tracking-widest text-xs">
+                    ESTIMATED COMPATIBILITY: 85%
+                 </div>
+                 <button onClick={handleUnfriend} className="flex items-center gap-2 font-bold uppercase tracking-widest text-xs hover:text-red-600 transition-colors ml-auto">
+                   <UserMinus size={16} /> UNFRIEND
+                 </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -103,8 +126,8 @@ export default function Profile({ userId, token }: { userId: number, token: stri
                </h3>
             </div>
 
-            {/* PENDING REQUESTS */}
-            {pending.length > 0 && (
+            {/* PENDING REQUESTS (Only for own profile) */}
+            {isOwnProfile && pending.length > 0 && (
               <div className="flex flex-col gap-4 mb-4">
                 <span className="text-[10px] font-bold tracking-[0.5em] text-grey-mid uppercase">INCOMING SIGNALS</span>
                 {pending.map((req) => (

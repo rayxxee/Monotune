@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, ArrowLeft, Send } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Send, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function ThreadDetail({ postId, user, token, onBack }: { postId: number, user: any, token: string, onBack: () => void }) {
   const [data, setData] = useState<any>(null);
@@ -48,6 +48,23 @@ export default function ThreadDetail({ postId, user, token, onBack }: { postId: 
     }
   };
 
+  const handleVote = async (type: 'up' | 'down') => {
+    try {
+      await fetch(`/api/posts/${postId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+      setData((prev: any) => ({
+        ...prev,
+        post: {
+          ...prev.post,
+          [type === 'up' ? 'upvotes' : 'downvotes']: prev.post[type === 'up' ? 'upvotes' : 'downvotes'] + 1
+        }
+      }));
+    } catch (err) {}
+  };
+
   if (!data) return null;
 
   return (
@@ -63,9 +80,20 @@ export default function ThreadDetail({ postId, user, token, onBack }: { postId: 
              <h4 className="font-bold text-xl tracking-tighter uppercase">{data.post.username}</h4>
              <span className="text-xs font-bold text-grey-mid uppercase">ORIGINAL SIGNAL</span>
           </div>
-          <p className="text-5xl font-black tracking-tighter leading-none uppercase italic">
-            "{data.post.content}"
-          </p>
+          <div>
+            <h2 className="text-6xl font-black tracking-tighter leading-none uppercase mb-4">{data.post.title || "UNTITLED"}</h2>
+            <p className="text-3xl font-bold tracking-tight uppercase italic opacity-60">
+              "{data.post.content}"
+            </p>
+          </div>
+          <div className="flex items-center gap-4 border-t-4 border-black pt-4">
+            <button onClick={() => handleVote('up')} className="flex items-center gap-2 font-bold text-xl hover:text-green-500">
+              <ArrowUp size={24} /> {data.post.upvotes || 0}
+            </button>
+            <button onClick={() => handleVote('down')} className="flex items-center gap-2 font-bold text-xl hover:text-red-500">
+              <ArrowDown size={24} /> {data.post.downvotes || 0}
+            </button>
+          </div>
         </div>
 
         {/* COMMENTS SECTION */}

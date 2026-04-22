@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { MessageSquare, Music, Upload, AlertCircle, Share2, Heart } from 'lucide-react';
+import { MessageSquare, Music, Upload, AlertCircle, Share2, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function ForumFeed({ user, token, onSelectThread }: { user: any, token: string, onSelectThread: (id: number) => void }) {
   const [posts, setPosts] = useState<any[]>([]);
+  const [newTitle, setNewTitle] = useState('');
   const [newPost, setNewPost] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ export default function ForumFeed({ user, token, onSelectThread }: { user: any, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          title: newTitle,
           content: newPost,
           userId: user.id
         })
@@ -39,6 +41,7 @@ export default function ForumFeed({ user, token, onSelectThread }: { user: any, 
         else throw new Error(data.error);
         return;
       }
+      setNewTitle('');
       setNewPost('');
       fetchPosts();
     } catch (err: any) {
@@ -46,6 +49,23 @@ export default function ForumFeed({ user, token, onSelectThread }: { user: any, 
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVote = async (postId: number, type: 'up' | 'down', e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await fetch(`/api/posts/${postId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+      setPosts(posts.map(p => {
+        if (p.id === postId) {
+          return { ...p, [type === 'up' ? 'upvotes' : 'downvotes']: p[type === 'up' ? 'upvotes' : 'downvotes'] + 1 };
+        }
+        return p;
+      }));
+    } catch (err) {}
   };
 
   return (
@@ -57,8 +77,15 @@ export default function ForumFeed({ user, token, onSelectThread }: { user: any, 
 
         {/* POST COMPOSER */}
         <div className="bg-white brutalist-border p-8 flex flex-col gap-4 shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
+          <input 
+            type="text"
+            className="w-full text-4xl font-black uppercase border-b-2 border-black pb-2 focus:outline-none placeholder:text-grey-mid"
+            placeholder="BROADCAST TITLE"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+          />
           <textarea 
-            className="w-full min-h-[120px] text-2xl font-bold uppercase border-none focus:ring-0 placeholder:opacity-20 resize-none"
+            className="w-full min-h-[100px] text-xl font-bold uppercase border-none focus:ring-0 placeholder:opacity-20 resize-none mt-2"
             placeholder="WHAT'S THE SIGNAL?"
             value={newPost}
             onChange={(e) => setNewPost(e.target.value)}
@@ -108,16 +135,26 @@ export default function ForumFeed({ user, token, onSelectThread }: { user: any, 
                 </span>
               </div>
 
-              <p className="text-3xl font-bold tracking-tighter leading-none uppercase">
-                "{post.content}"
-              </p>
+              <div>
+                <h3 className="text-4xl font-black tracking-tighter leading-none uppercase mb-2">
+                  {post.title || "UNTITLED"}
+                </h3>
+                <p className="text-xl font-bold tracking-tight uppercase opacity-60">
+                  {post.content}
+                </p>
+              </div>
 
               <div className="flex gap-8 items-center pt-4 border-t-2 border-black">
-                <div className="flex items-center gap-2 font-bold text-xs">
-                  <MessageSquare size={16} /> 24 COMMENTS
+                <div className="flex items-center gap-4">
+                  <button onClick={(e) => handleVote(post.id, 'up', e)} className="flex items-center gap-1 font-bold text-xs hover:text-green-500">
+                    <ArrowUp size={16} /> {post.upvotes || 0}
+                  </button>
+                  <button onClick={(e) => handleVote(post.id, 'down', e)} className="flex items-center gap-1 font-bold text-xs hover:text-red-500">
+                    <ArrowDown size={16} /> {post.downvotes || 0}
+                  </button>
                 </div>
                 <div className="flex items-center gap-2 font-bold text-xs">
-                  <Heart size={16} /> {post.likes_count}
+                  <MessageSquare size={16} /> REPLIES
                 </div>
                 <div className="ml-auto">
                    <Share2 size={16} className="opacity-20" />
