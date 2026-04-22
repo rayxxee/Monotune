@@ -16,7 +16,7 @@ export default function Profile({ currentUser, userId, token }: { currentUser: a
     setLoading(true);
     try {
       const [profileRes, friendsRes, pendingRes] = await Promise.all([
-        fetch(`/api/users/${userId}`),
+        fetch(`/api/users/${userId}?viewerId=${currentUser.id}`),
         fetch(`/api/users/${userId}/friends`),
         fetch(`/api/users/${userId}/pending`)
       ]);
@@ -59,7 +59,21 @@ export default function Profile({ currentUser, userId, token }: { currentUser: a
         body: JSON.stringify({ userId1: currentUser.id, userId2: userId })
       });
       alert('CONNECTION SEVERED.');
+      fetchProfileData();
     } catch (e) {}
+  };
+
+  const handleRequestFriend = async () => {
+    try {
+      const res = await fetch('/api/friendships/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId1: currentUser.id, userId2: userId })
+      });
+      if (res.ok) fetchProfileData();
+    } catch (err) {
+      console.error('Failed to send request');
+    }
   };
 
   const handleSpotify = async () => {
@@ -103,13 +117,28 @@ export default function Profile({ currentUser, userId, token }: { currentUser: a
               </button>
             )}
             {!isOwnProfile && (
-              <div className="flex gap-4 items-center border-t-2 border-black pt-4">
+              <div className="flex gap-4 items-center border-t-2 border-black pt-4 w-full">
                  <div className="bg-black text-white px-4 py-2 font-bold uppercase tracking-widest text-xs">
                     ESTIMATED COMPATIBILITY: 85%
                  </div>
-                 <button onClick={handleUnfriend} className="flex items-center gap-2 font-bold uppercase tracking-widest text-xs hover:text-red-600 transition-colors ml-auto">
-                   <UserMinus size={16} /> UNFRIEND
-                 </button>
+                 
+                 {profile.friendship_status === 'accepted' ? (
+                   <button onClick={handleUnfriend} className="flex items-center gap-2 font-bold uppercase tracking-widest text-xs hover:text-red-600 transition-colors ml-auto">
+                     <UserMinus size={16} /> UNFRIEND
+                   </button>
+                 ) : profile.friendship_status === 'pending' ? (
+                   profile.friendship_sender === currentUser.id ? (
+                     <span className="font-bold uppercase tracking-widest text-xs text-grey-mid ml-auto border border-grey-mid px-4 py-2">REQUEST SENT</span>
+                   ) : (
+                     <button onClick={() => handleRespond(profile.friendship_id, 'accepted')} className="flex items-center gap-2 font-bold uppercase tracking-widest text-xs text-green-600 hover:text-black hover:bg-green-400 border border-green-600 px-4 py-2 transition-colors ml-auto">
+                       <Check size={16} /> ACCEPT REQUEST
+                     </button>
+                   )
+                 ) : (
+                   <button onClick={handleRequestFriend} className="flex items-center gap-2 font-bold uppercase tracking-widest text-xs hover:text-cyan-500 transition-colors ml-auto">
+                     <User size={16} /> ADD CONNECTION
+                   </button>
+                 )}
               </div>
             )}
           </div>

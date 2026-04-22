@@ -407,6 +407,19 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
 app.post('/api/friendships/request', async (req, res) => {
   const { userId1, userId2 } = req.body;
   try {
+    // Check if the target user has already liked us (pending request from them to us)
+    const existingIncoming = db.prepare(
+      'SELECT * FROM friendships WHERE user_id_1 = ? AND user_id_2 = ? AND status = "pending"'
+    ).get(userId2, userId1) as any;
+
+    if (existingIncoming) {
+      // MATCH!
+      db.prepare(
+        'UPDATE friendships SET status = "accepted" WHERE id = ?'
+      ).run(existingIncoming.id);
+      return res.json({ success: true, isMatch: true });
+    }
+
     // Determine similarity snapshot for the friendship record
     const u1 = db.prepare('SELECT * FROM users WHERE id = ?').get(userId1) as any;
     const u2 = db.prepare('SELECT * FROM users WHERE id = ?').get(userId2) as any;
@@ -415,7 +428,7 @@ app.post('/api/friendships/request', async (req, res) => {
     db.prepare(
       'INSERT INTO friendships (user_id_1, user_id_2, status, similarity_score) VALUES (?, ?, "pending", ?)'
     ).run(userId1, userId2, score);
-    res.json({ success: true });
+    res.json({ success: true, isMatch: false });
   } catch (err: any) {
     res.status(500).json({ error: 'FRIEND REQUEST FAILED. SIGNAL LOST.' });
   }
@@ -481,11 +494,24 @@ app.get('/api/users/:id/pending', async (req, res) => {
 
 // --- USER PROFILE ROUTE ---
 app.get('/api/users/:id', async (req, res) => {
+  const viewerId = req.query.viewerId;
   try {
     const user = db.prepare(`
       SELECT id, username, email, top_artist_1, top_artist_2, top_artist_3, top_artist_4, top_artist_5, liner_notes, profile_picture, is_admin, is_banned, min_similarity_threshold, created_at 
       FROM users WHERE id = ?
-    `).get(req.params.id);
+    `).get(req.params.id) as any;
+
+    if (viewerId && String(viewerId) !== String(req.params.id)) {
+      const friendship = db.prepare(`
+        SELECT * FROM friendships 
+        WHERE (user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?)
+      `).get(viewerId, req.params.id, req.params.id, viewerId) as any;
+
+      user.friendship_status = friendship ? friendship.status : 'none';
+      user.friendship_sender = friendship ? friendship.user_id_1 : null;
+      user.friendship_id = friendship ? friendship.id : null;
+    }
+
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: 'USER RECORD UNREADABLE.' });
