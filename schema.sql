@@ -22,7 +22,11 @@ CREATE TABLE IF NOT EXISTS users (
     liner_notes TEXT, -- Bio
     profile_picture VARCHAR(255),
     
+    -- Settings & Moderation
+    min_similarity_threshold INTEGER DEFAULT 0,
     is_admin BOOLEAN DEFAULT 0,
+    is_banned BOOLEAN DEFAULT 0,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -31,16 +35,19 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
+    title VARCHAR(255) DEFAULT 'Untitled',
     content TEXT NOT NULL,
     
     -- Content Metadata
     image_url VARCHAR(255),
     spotify_track_id VARCHAR(100),
     
-    -- Moderation
+    -- Moderation & Engagement
     is_toxic BOOLEAN DEFAULT 0,
     toxicity_score FLOAT DEFAULT 0.0,
     
+    upvotes INTEGER DEFAULT 0,
+    downvotes INTEGER DEFAULT 0,
     likes_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -78,4 +85,17 @@ CREATE TABLE IF NOT EXISTS friendships (
     UNIQUE (user_id_1, user_id_2),
     FOREIGN KEY (user_id_1) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id_2) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- MESSAGES TABLE (Chat Hub)
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_id INTEGER NOT NULL,
+    receiver_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    spotify_track_id VARCHAR(100),
+    is_read BOOLEAN DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
 );

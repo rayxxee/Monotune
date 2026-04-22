@@ -114,11 +114,23 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
     
+    if (user.is_banned) {
+      return res.status(403).json({ error: 'Account has been banned by a moderator.' });
+    }
+    
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
     res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
   } catch (err: any) {
     res.status(500).json({ error: 'Login failed.' });
   }
+});
+
+app.get('/api/auth/spotify', (req, res) => {
+  res.json({ url: '/mock-spotify-callback' });
+});
+
+app.post('/api/auth/reset', (req, res) => {
+  res.json({ success: true, message: 'Password reset link sent (mock)' });
 });
 
 // --- ONBOARDING ROUTE ---
@@ -132,6 +144,18 @@ app.post('/api/users/onboarding', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: 'Onboarding failed.' });
   }
+});
+
+app.get('/api/music/search', (req, res) => {
+  const query = req.query.q as string;
+  if (!query) return res.json([]);
+  // Return dummy mock results
+  const mockResults = [
+    { name: query, type: 'artist' },
+    { name: `${query} & The Band`, type: 'artist' },
+    { name: `Lil ${query}`, type: 'artist' }
+  ];
+  res.json(mockResults);
 });
 
 // --- DISCOVERY ENGINE ---
@@ -173,6 +197,8 @@ app.get('/api/discover', async (req, res) => {
       AND id NOT IN (SELECT user_id_1 FROM friendships WHERE user_id_2 = ? AND status IN ('accepted', 'rejected'))
     `).all(decoded.id, decoded.id, decoded.id) as any;
     
+    const threshold = currentUser.min_similarity_threshold || 0;
+
     const recommendations = allUsers.map((other: any) => {
       const score = calculateRank(currentUser, other);
       
@@ -189,6 +215,7 @@ app.get('/api/discover', async (req, res) => {
         sharedArtists: shared
       };
     })
+    .filter((a: any) => a.matchScore >= threshold)
     .sort((a: any, b: any) => b.matchScore - a.matchScore);
 
     res.json(recommendations);
@@ -276,7 +303,7 @@ const checkToxicity = async (text: string) => {
 
 // Create Post
 app.post('/api/posts', async (req, res) => {
-  const { content, userId, imageUrl, spotifyTrackId } = req.body;
+  const { title, content, userId, imageUrl, spotifyTrackId } = req.body;
   
   // Toxicity Check
   const mod = await checkToxicity(content);
@@ -289,9 +316,9 @@ app.post('/api/posts', async (req, res) => {
 
   try {
     const result = db.prepare(
-      'INSERT INTO posts (user_id, content, image_url, spotify_track_id, is_toxic, toxicity_score) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(userId, content, imageUrl || null, spotifyTrackId || null, mod.is_toxic ? 1 : 0, mod.score);
-    res.json({ id: result.lastInsertRowid, content, success: true });
+      'INSERT INTO posts (user_id, title, content, image_url, spotify_track_id, is_toxic, toxicity_score) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(userId, title || 'Untitled', content, imageUrl || null, spotifyTrackId || null, mod.is_toxic ? 1 : 0, mod.score);
+    res.json({ id: result.lastInsertRowid, title, content, success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to broadcast signal.' });
   }
@@ -334,6 +361,21 @@ app.get('/api/posts/:id', async (req, res) => {
     res.json({ post, comments });
   } catch (err) {
     res.status(500).json({ error: 'Failed to sync with thread.' });
+  }
+});
+
+// Vote Post
+app.post('/api/posts/:id/vote', async (req, res) => {
+  const { type } = req.body;
+  try {
+    if (type === 'up') {
+      db.prepare('UPDATE posts SET upvotes = upvotes + 1 WHERE id = ?').run(req.params.id);
+    } else {
+      db.prepare('UPDATE posts SET downvotes = downvotes + 1 WHERE id = ?').run(req.params.id);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Vote failed.' });
   }
 });
 
@@ -392,6 +434,17 @@ app.post('/api/friendships/respond', async (req, res) => {
   }
 });
 
+// Unfriend
+app.post('/api/friendships/unfriend', async (req, res) => {
+  const { userId1, userId2 } = req.body;
+  try {
+    db.prepare('DELETE FROM friendships WHERE (user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?)').run(userId1, userId2, userId2, userId1);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Unfriend failed.' });
+  }
+});
+
 // Get User Friends / Connections
 app.get('/api/users/:id/friends', async (req, res) => {
   try {
@@ -430,7 +483,7 @@ app.get('/api/users/:id/pending', async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const user = db.prepare(`
-      SELECT id, username, email, top_artist_1, top_artist_2, top_artist_3, top_artist_4, top_artist_5, liner_notes, profile_picture, is_admin, created_at 
+      SELECT id, username, email, top_artist_1, top_artist_2, top_artist_3, top_artist_4, top_artist_5, liner_notes, profile_picture, is_admin, is_banned, min_similarity_threshold, created_at 
       FROM users WHERE id = ?
     `).get(req.params.id);
     res.json(user);
@@ -439,7 +492,96 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
+// Update Settings
+app.patch('/api/users/:id/settings', async (req, res) => {
+  const { email, password, minSimilarityThreshold } = req.body;
+  try {
+    let query = 'UPDATE users SET min_similarity_threshold = ?';
+    const params: any[] = [minSimilarityThreshold || 0];
+    
+    if (email) {
+      query += ', email = ?';
+      params.push(email);
+    }
+    
+    if (password && password.length > 0) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      query += ', password_hash = ?';
+      params.push(hashedPassword);
+    }
+    
+    query += ' WHERE id = ?';
+    params.push(req.params.id);
+    
+    db.prepare(query).run(...params);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update settings.' });
+  }
+});
+
+// --- CHAT ROUTES ---
+app.get('/api/chats/:friendId', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+  
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const currentUserId = decoded.id;
+    
+    const messages = db.prepare(`
+      SELECT * FROM messages 
+      WHERE (sender_id = ? AND receiver_id = ?) 
+         OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY created_at ASC
+    `).all(currentUserId, req.params.friendId, req.params.friendId, currentUserId);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch messages.' });
+  }
+});
+
+app.post('/api/chats/:friendId', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+  
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const currentUserId = decoded.id;
+    const { content, spotifyTrackId } = req.body;
+    
+    db.prepare(`
+      INSERT INTO messages (sender_id, receiver_id, content, spotify_track_id)
+      VALUES (?, ?, ?, ?)
+    `).run(currentUserId, req.params.friendId, content, spotifyTrackId || null);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Message failed.' });
+  }
+});
+
 // --- ADMIN DASHBOARD ROUTES ---
+app.post('/api/admin/ban', async (req, res) => {
+  const { userId, isBanned } = req.body;
+  try {
+    db.prepare('UPDATE users SET is_banned = ? WHERE id = ?').run(isBanned ? 1 : 0, userId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Ban failed.' });
+  }
+});
+
+app.get('/api/admin/review-queue', async (req, res) => {
+  try {
+    const posts = db.prepare('SELECT p.*, u.username FROM posts p JOIN users u ON p.user_id = u.id WHERE p.is_toxic = 0 AND p.toxicity_score > 0 ORDER BY p.created_at DESC').all();
+    const comments = db.prepare('SELECT c.*, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.is_toxic = 0 AND c.toxicity_score > 0 ORDER BY c.created_at DESC').all();
+    res.json({ posts, comments });
+  } catch (err) {
+    res.status(500).json({ error: 'Review queue fetch failed.' });
+  }
+});
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as any;
