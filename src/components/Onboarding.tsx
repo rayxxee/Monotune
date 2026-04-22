@@ -46,6 +46,10 @@ export default function Onboarding({ user, token, onComplete }: { user: any, tok
         })
       });
       if (!res.ok) throw new Error('Failed to save onboarding data.');
+      
+      const updatedUser = { ...user, hasOnboarded: true };
+      localStorage.setItem('monutune_user', JSON.stringify(updatedUser));
+      
       onComplete();
     } catch (err) {
       alert('ONBOARDING FAILED. RE-SIGNAL LATER.');

@@ -494,7 +494,7 @@ app.get('/api/users/:id', async (req, res) => {
 
 // Update Settings
 app.patch('/api/users/:id/settings', async (req, res) => {
-  const { email, password, minSimilarityThreshold } = req.body;
+  const { email, password, minSimilarityThreshold, topArtists, linerNotes } = req.body;
   try {
     let query = 'UPDATE users SET min_similarity_threshold = ?';
     const params: any[] = [minSimilarityThreshold || 0];
@@ -508,6 +508,16 @@ app.patch('/api/users/:id/settings', async (req, res) => {
       const hashedPassword = await bcrypt.hash(password, 10);
       query += ', password_hash = ?';
       params.push(hashedPassword);
+    }
+
+    if (topArtists && topArtists.length === 5) {
+      query += ', top_artist_1 = ?, top_artist_2 = ?, top_artist_3 = ?, top_artist_4 = ?, top_artist_5 = ?';
+      params.push(...topArtists);
+    }
+
+    if (linerNotes !== undefined) {
+      query += ', liner_notes = ?';
+      params.push(linerNotes);
     }
     
     query += ' WHERE id = ?';

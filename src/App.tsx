@@ -21,9 +21,14 @@ export default function App() {
     const savedToken = localStorage.getItem('monutune_token');
     const savedUser = localStorage.getItem('monutune_user');
     if (savedToken && savedUser) {
+      const parsedUser = JSON.parse(savedUser);
       setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-      setStep('FEED');
+      setUser(parsedUser);
+      if (parsedUser.hasOnboarded) {
+        setStep('FEED');
+      } else {
+        setStep('ONBOARDING');
+      }
     }
   }, []);
 
