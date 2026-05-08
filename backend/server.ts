@@ -663,6 +663,7 @@ app.get('/api/users/:id', async (req, res) => {
     };
 
     if (viewerId && String(viewerId) !== String(req.params.id)) {
+      const viewerUser = await User.findById(viewerId).select('top_artists').lean();
       const friendship = await Friendship.findOne({
         $or: [
           { user_id_1: viewerId, user_id_2: req.params.id },
@@ -673,6 +674,10 @@ app.get('/api/users/:id', async (req, res) => {
       user.friendship_status = friendship ? friendship.status : 'none';
       user.friendship_sender = friendship ? friendship.user_id_1 : null;
       user.friendship_id = friendship ? friendship._id : null;
+      
+      if (viewerUser) {
+        user.similarity_score = calculateRank(viewerUser.top_artists, userObj.top_artists);
+      }
     }
 
     res.json(user);

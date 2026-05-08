@@ -267,7 +267,7 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
             {!isOwnProfile && (
               <div className="flex gap-4 items-center border-t-2 border-black pt-4 w-full">
                  <div className="bg-black text-white px-4 py-2 font-bold uppercase tracking-widest text-xs">
-                    ESTIMATED COMPATIBILITY: 85%
+                    ESTIMATED COMPATIBILITY: {profile.similarity_score ?? '??'}%
                  </div>
                  
                  {profile.friendship_status === 'accepted' ? (
