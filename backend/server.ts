@@ -28,6 +28,33 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// --- AUTH MIDDLEWARE ---
+const requireAuth = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // Ban check — reject banned users at middleware level (Issue #10)
+    const user = await User.findById(decoded.id).select('is_banned is_admin').lean();
+    if (!user) return res.status(401).json({ error: 'User not found.' });
+    if (user.is_banned) return res.status(403).json({ error: 'Account banned.' });
+    
+    req.userId = decoded.id;
+    req.username = decoded.username;
+    req.isAdmin = user.is_admin;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token.' });
+  }
+};
+
+const requireAdmin = async (req: any, res: any, next: any) => {
+  if (!req.isAdmin) return res.status(403).json({ error: 'Admin access required.' });
+  next();
+};
+
 // --- BASE API ROUTES ---
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -43,7 +70,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-app.post('/api/upload', upload.single('image'), async (req, res) => {
+app.post('/api/upload', requireAuth, upload.single('image'), async (req: any, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No image provided' });
     const image = await Image.create({
@@ -68,7 +95,8 @@ app.get('/api/images/:id', async (req, res) => {
 });
 
 // --- PROFILE PICTURE UPLOAD ---
-app.post('/api/users/:id/profile-picture', upload.single('image'), async (req, res) => {
+app.post('/api/users/:id/profile-picture', requireAuth, upload.single('image'), async (req: any, res) => {
+  if (req.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden.' });
   try {
     if (!req.file) return res.status(400).json({ error: 'No image provided.' });
 
@@ -96,7 +124,8 @@ app.post('/api/users/:id/profile-picture', upload.single('image'), async (req, r
 });
 
 // DELETE profile picture
-app.delete('/api/users/:id/profile-picture', async (req, res) => {
+app.delete('/api/users/:id/profile-picture', requireAuth, async (req: any, res) => {
+  if (req.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden.' });
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -166,8 +195,9 @@ app.post('/api/auth/reset', (req, res) => {
 });
 
 // --- ONBOARDING ROUTE ---
-app.post('/api/users/onboarding', async (req, res) => {
-  const { userId, topArtists, linerNotes, favoriteGenre, anthemTrackId, anthemName } = req.body;
+app.post('/api/users/onboarding', requireAuth, async (req: any, res) => {
+  const { topArtists, linerNotes, favoriteGenre, anthemTrackId, anthemName } = req.body;
+  const userId = req.userId;
   try {
     await User.findByIdAndUpdate(userId, {
       $set: {
@@ -214,15 +244,10 @@ const calculateRank = (artists1: string[], artists2: string[]) => {
   return Math.round((intersection.size / union.size) * 100);
 };
 
-app.get('/api/discover', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  
+app.get('/api/discover', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    
-    const currentUser = await User.findById(decoded.id);
+    const decoded = { id: req.userId, username: req.username };
+const currentUser = await User.findById(decoded.id);
     if (!currentUser) return res.status(401).json({ error: 'User not found' });
     
     const genreFilter = req.query.genre as string;
@@ -294,14 +319,10 @@ app.get('/api/discover', async (req, res) => {
 });
 
 // Get remaining Encores
-app.get('/api/discover/encores/remaining', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/discover/encores/remaining', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    
-    // Mongoose: count encores today
+    const decoded = { id: req.userId, username: req.username };
+// Mongoose: count encores today
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const count = await Encore.countDocuments({
@@ -315,14 +336,10 @@ app.get('/api/discover/encores/remaining', async (req, res) => {
   }
 });
 
-app.post('/api/discover/swipe', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  
+app.post('/api/discover/swipe', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const currentUserId = decoded.id;
+    const decoded = { id: req.userId, username: req.username };
+const currentUserId = decoded.id;
     const { targetUserId, direction, isEncore } = req.body;
     
     if (isEncore) {
@@ -403,8 +420,9 @@ const checkToxicity = async (text: string) => {
 
 // --- FORUM ROUTES ---
 
-app.post('/api/posts', async (req, res) => {
-  const { title, content, userId, imageUrl, spotifyTrackId } = req.body;
+app.post('/api/posts', requireAuth, async (req: any, res) => {
+  const { title, content, imageUrl, spotifyTrackId } = req.body;
+  const userId = req.userId;
   
   const mod = await checkToxicity(content);
   if (mod.is_toxic) {
@@ -472,8 +490,12 @@ app.get('/api/users/:id/posts', async (req, res) => {
   }
 });
 
-app.delete('/api/posts/:id', async (req, res) => {
+app.delete('/api/posts/:id', requireAuth, async (req: any, res) => {
   try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found.' });
+    if (post.user_id.toString() !== req.userId && !req.isAdmin) return res.status(403).json({ error: 'Forbidden.' });
+
     await Post.findByIdAndDelete(req.params.id);
     await Comment.deleteMany({ post_id: req.params.id });
     res.json({ success: true });
@@ -516,138 +538,10 @@ app.get('/api/posts/:id', async (req, res) => {
   }
 });
 
-app.post('/api/posts/:id/vote', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { type } = req.body;
+app.post('/api/posts/:id/vote', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const userId = decoded.id;
-    
-    const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ error: 'Post not found' });
-
-    const hasUpvoted = post.upvoted_by.some(id => id.toString() === userId);
-    const hasDownvoted = post.downvoted_by.some(id => id.toString() === userId);
-
-    if (hasUpvoted) {
-      post.upvotes -= 1;
-      post.upvoted_by = post.upvoted_by.filter(id => id.toString() !== userId) as any;
-    }
-    if (hasDownvoted) {
-      post.downvotes -= 1;
-      post.downvoted_by = post.downvoted_by.filter(id => id.toString() !== userId) as any;
-    }
-
-    if (type === 'up' && !hasUpvoted) {
-      post.upvotes += 1;
-      post.upvoted_by.push(userId as any);
-    } else if (type === 'down' && !hasDownvoted) {
-      post.downvotes += 1;
-      post.downvoted_by.push(userId as any);
-    }
-    
-    await post.save();
-    res.json({ success: true, upvotes: post.upvotes, downvotes: post.downvotes });
-  } catch (err) {
-    res.status(500).json({ error: 'Vote failed.' });
-  }
-});
-
-app.post('/api/posts/:postId/comments', async (req, res) => {
-  const { content, userId } = req.body;
-  
-  const mod = await checkToxicity(content);
-  if (mod.is_toxic) {
-    return res.status(400).json({ 
-      error: 'COMMENT REJECTED: TOXICITY DETECTED.',
-      is_toxic: true 
-    });
-  }
-
-  try {
-    await Comment.create({
-      post_id: req.params.postId,
-      user_id: userId,
-      content,
-      is_toxic: mod.is_toxic,
-      toxicity_score: mod.score
-    });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to transmit comment.' });
-  }
-});
-
-// --- FRIENDSHIP ROUTES ---
-
-app.post('/api/friendships/request', async (req, res) => {
-  const { userId1, userId2 } = req.body;
-  try {
-    const existingIncoming = await Friendship.findOne({
-      user_id_1: userId2,
-      user_id_2: userId1,
-      status: 'pending'
-    });
-
-    if (existingIncoming) {
-      existingIncoming.status = 'accepted';
-      await existingIncoming.save();
-      return res.json({ success: true, isMatch: true });
-    }
-
-    const u1 = await User.findById(userId1);
-    const u2 = await User.findById(userId2);
-    if(!u1 || !u2) throw new Error('User not found');
-    const score = calculateRank(u1.top_artists, u2.top_artists);
-
-    await Friendship.create({
-      user_id_1: userId1,
-      user_id_2: userId2,
-      status: 'pending',
-      similarity_score: score
-    });
-    res.json({ success: true, isMatch: false });
-  } catch (err: any) {
-    res.status(500).json({ error: 'FRIEND REQUEST FAILED. SIGNAL LOST.' });
-  }
-});
-
-app.post('/api/friendships/respond', async (req, res) => {
-  const { friendshipId, status } = req.body; 
-  try {
-    await Friendship.findByIdAndUpdate(friendshipId, { status });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'RESPONSE FAILED.' });
-  }
-});
-
-app.post('/api/friendships/unfriend', async (req, res) => {
-  const { userId1, userId2 } = req.body;
-  try {
-    await Friendship.deleteMany({
-      $or: [
-        { user_id_1: userId1, user_id_2: userId2 },
-        { user_id_1: userId2, user_id_2: userId1 }
-      ]
-    });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Unfriend failed.' });
-  }
-});
-
-// --- BLOCKS ---
-app.post('/api/users/:id/block', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const blockerId = decoded.id;
+    const decoded = { id: req.userId, username: req.username };
+const blockerId = decoded.id;
     const blockedId = req.params.id;
 
     await Friendship.deleteMany({
@@ -668,27 +562,20 @@ app.post('/api/users/:id/block', async (req, res) => {
   }
 });
 
-app.post('/api/users/:id/unblock', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+app.post('/api/users/:id/unblock', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    await Block.deleteOne({ blocker_id: decoded.id, blocked_id: req.params.id });
+    const decoded = { id: req.userId, username: req.username };
+await Block.deleteOne({ blocker_id: decoded.id, blocked_id: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Unblock failed.' });
   }
 });
 
-app.get('/api/blocks', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/blocks', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    
-    const blocks = await Block.find({ blocker_id: decoded.id })
+    const decoded = { id: req.userId, username: req.username };
+const blocks = await Block.find({ blocker_id: decoded.id })
       .populate('blocked_id', 'username')
       .lean();
       
@@ -805,7 +692,8 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/users/:id/settings', async (req, res) => {
+app.patch('/api/users/:id/settings', requireAuth, async (req: any, res) => {
+  if (req.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden.' });
   const { email, password, minSimilarityThreshold, topArtists, linerNotes, favoriteGenre, anthemTrackId, anthemName, profileImages } = req.body;
   try {
     const update: any = { min_similarity_threshold: minSimilarityThreshold || 0 };
@@ -835,13 +723,10 @@ app.patch('/api/users/:id/settings', async (req, res) => {
 });
 
 // --- STORIES ROUTES ---
-app.get('/api/stories', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/stories', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const currentUserId = decoded.id;
+    const decoded = { id: req.userId, username: req.username };
+const currentUserId = decoded.id;
     
     const friendships = await Friendship.find({
       $or: [{ user_id_1: currentUserId }, { user_id_2: currentUserId }],
@@ -896,13 +781,10 @@ app.get('/api/stories', async (req, res) => {
   }
 });
 
-app.post('/api/stories', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+app.post('/api/stories', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const { trackName, artistName, backgroundColor, spotifyTrackId, imageUrl } = req.body;
+    const decoded = { id: req.userId, username: req.username };
+const { trackName, artistName, backgroundColor, spotifyTrackId, imageUrl } = req.body;
     
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 1);
@@ -924,14 +806,10 @@ app.post('/api/stories', async (req, res) => {
 });
 
 // --- CHAT ROUTES ---
-app.get('/api/chats/inbox', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  
+app.get('/api/chats/inbox', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const currentUserId = decoded.id;
+    const decoded = { id: req.userId, username: req.username };
+const currentUserId = decoded.id;
 
     const friendships = await Friendship.find({
       $or: [{ user_id_1: currentUserId }, { user_id_2: currentUserId }],
@@ -981,14 +859,10 @@ app.get('/api/chats/inbox', async (req, res) => {
   }
 });
 
-app.get('/api/chats/:friendId', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  
+app.get('/api/chats/:friendId', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const currentUserId = decoded.id;
+    const decoded = { id: req.userId, username: req.username };
+const currentUserId = decoded.id;
     
     const messages = await Message.find({
       $or: [
@@ -1003,14 +877,10 @@ app.get('/api/chats/:friendId', async (req, res) => {
   }
 });
 
-app.post('/api/chats/:friendId', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  
+app.post('/api/chats/:friendId', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const currentUserId = decoded.id;
+    const decoded = { id: req.userId, username: req.username };
+const currentUserId = decoded.id;
     const { content, spotifyTrackId, messageType, reactionTrackId, trackName, trackArtist, trackImage } = req.body;
     
     await Message.create({
@@ -1030,13 +900,10 @@ app.post('/api/chats/:friendId', async (req, res) => {
   }
 });
 
-app.patch('/api/messages/:friendId/read', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+app.patch('/api/messages/:friendId/read', requireAuth, async (req: any, res) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    await Message.updateMany(
+    const decoded = { id: req.userId, username: req.username };
+await Message.updateMany(
       { sender_id: req.params.friendId, receiver_id: decoded.id },
       { $set: { is_read: true } }
     );
@@ -1047,7 +914,7 @@ app.patch('/api/messages/:friendId/read', async (req, res) => {
 });
 
 // --- ADMIN DASHBOARD ROUTES ---
-app.post('/api/admin/ban', async (req, res) => {
+app.post('/api/admin/ban', requireAuth, requireAdmin, async (req: any, res) => {
   const { userId, isBanned } = req.body;
   try {
     await User.findByIdAndUpdate(userId, { is_banned: isBanned });
@@ -1057,7 +924,7 @@ app.post('/api/admin/ban', async (req, res) => {
   }
 });
 
-app.get('/api/admin/review-queue', async (req, res) => {
+app.get('/api/admin/review-queue', requireAuth, requireAdmin, async (req: any, res) => {
   try {
     const postsRaw = await Post.find({ is_toxic: false, toxicity_score: { $gt: 0 } })
       .populate('user_id', 'username')
@@ -1075,7 +942,7 @@ app.get('/api/admin/review-queue', async (req, res) => {
   }
 });
 
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats', requireAuth, requireAdmin, async (req: any, res) => {
   try {
     const userCount = await User.countDocuments();
     const postCount = await Post.countDocuments();
