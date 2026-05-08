@@ -594,7 +594,27 @@ export default function Settings({ user, token, onLogout }: { user: any, token: 
             <LogOut size={16} /> DISCONNECT
           </button>
           
-          <button className="flex items-center gap-2 font-bold uppercase tracking-widest text-sm text-red-600 hover:underline">
+          <button
+            onClick={async () => {
+              if (!confirm('⚠️ THIS WILL PERMANENTLY DELETE YOUR ACCOUNT AND ALL DATA. THIS CANNOT BE UNDONE. ARE YOU ABSOLUTELY SURE?')) return;
+              if (!confirm('LAST CHANCE. TYPE "DELETE" IN THE NEXT PROMPT TO CONFIRM.')) return;
+              const answer = prompt('TYPE "DELETE" TO CONFIRM ACCOUNT PURGE:');
+              if (answer !== 'DELETE') return;
+              try {
+                const res = await fetch(`/api/users/${user.id}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                  alert('ACCOUNT PURGED. GOODBYE.');
+                  onLogout();
+                } else {
+                  alert('DELETION FAILED.');
+                }
+              } catch (e) { alert('CRITICAL ERROR.'); }
+            }}
+            className="flex items-center gap-2 font-bold uppercase tracking-widest text-sm text-red-600 hover:underline"
+          >
             <AlertTriangle size={16} /> PURGE ACCOUNT
           </button>
         </div>

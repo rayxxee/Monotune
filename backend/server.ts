@@ -712,6 +712,44 @@ app.patch('/api/users/:id/settings', requireAuth, async (req: any, res) => {
   }
 });
 
+// --- ACCOUNT DELETION ---
+app.delete('/api/users/:id', requireAuth, async (req: any, res) => {
+  if (req.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden.' });
+  try {
+    const userId = req.params.id;
+    
+    // Cascade delete all user data
+    await Promise.all([
+      Post.deleteMany({ user_id: userId }),
+      Comment.deleteMany({ user_id: userId }),
+      Message.deleteMany({ $or: [{ sender_id: userId }, { receiver_id: userId }] }),
+      Friendship.deleteMany({ $or: [{ user_id_1: userId }, { user_id_2: userId }] }),
+      Story.deleteMany({ user_id: userId }),
+      Block.deleteMany({ $or: [{ blocker_id: userId }, { blocked_id: userId }] }),
+      Encore.deleteMany({ $or: [{ sender_id: userId }, { receiver_id: userId }] }),
+    ]);
+    
+    // Delete profile picture image if exists
+    const user = await User.findById(userId);
+    if (user?.profile_picture) {
+      const imageId = user.profile_picture.split('/').pop();
+      if (imageId) await Image.findByIdAndDelete(imageId);
+    }
+    // Delete profile showcase images
+    if (user?.profile_images) {
+      for (const img of user.profile_images) {
+        const imgId = img.split('/').pop();
+        if (imgId) await Image.findByIdAndDelete(imgId);
+      }
+    }
+    
+    await User.findByIdAndDelete(userId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Account deletion failed.' });
+  }
+});
+
 // --- STORIES ROUTES ---
 app.get('/api/stories', requireAuth, async (req: any, res) => {
   try {
