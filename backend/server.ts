@@ -190,10 +190,6 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 
-app.post('/api/auth/reset', (req, res) => {
-  res.json({ success: true, message: 'Password reset link sent (mock)' });
-});
-
 // --- ONBOARDING ROUTE ---
 app.post('/api/users/onboarding', requireAuth, async (req: any, res) => {
   const { topArtists, linerNotes, favoriteGenre, anthemTrackId, anthemName } = req.body;

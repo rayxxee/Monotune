@@ -5,19 +5,6 @@ export default function Auth({ onAuth }: { onAuth: (user: any, token: string) =>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
-  const [resetSent, setResetSent] = useState(false);
-
-  const handleReset = async () => {
-    if (!formData.email) {
-      setError('ENTER EMAIL TO RESET PASSWORD.');
-      return;
-    }
-    try {
-      await fetch('/api/auth/reset', { method: 'POST' });
-      setResetSent(true);
-      setError('');
-    } catch (e) {}
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,11 +68,10 @@ export default function Auth({ onAuth }: { onAuth: (user: any, token: string) =>
             className="brutalist-border p-4 font-bold uppercase"
             value={formData.password}
             onChange={(e) => setFormData({...formData, password: e.target.value})}
-            required={!resetSent}
+            required
           />
           
           {error && <p className="text-black bg-white border border-black p-2 text-xs font-bold uppercase">{error}</p>}
-          {resetSent && <p className="text-black bg-green-400 border border-black p-2 text-xs font-bold uppercase">RESET LINK SENT.</p>}
           
           <button 
             type="submit" 
@@ -97,17 +83,8 @@ export default function Auth({ onAuth }: { onAuth: (user: any, token: string) =>
         </form>
         
         <div className="mt-8 flex flex-col gap-4">
-          {isLogin && (
-            <button 
-              type="button"
-              onClick={handleReset}
-              className="text-xs font-bold tracking-widest uppercase underline hover:no-underline opacity-50 hover:opacity-100 block w-full text-center"
-            >
-              FORGOT PASSWORD PROTOCOL
-            </button>
-          )}
           <button 
-            onClick={() => { setIsLogin(!isLogin); setError(''); setResetSent(false); }}
+            onClick={() => { setIsLogin(!isLogin); setError(''); }}
             className="text-xs font-bold tracking-widest uppercase underline hover:no-underline opacity-50 hover:opacity-100 w-full text-center"
           >
             {isLogin ? 'NEED AN IDENTITY? SIGN UP' : 'ALREADY HAVE A SIGNAL? LOGIN'}
