@@ -214,17 +214,6 @@ app.post('/api/users/onboarding', requireAuth, async (req: any, res) => {
   }
 });
 
-app.get('/api/music/search', (req, res) => {
-  const query = req.query.q as string;
-  if (!query) return res.json([]);
-  // Return dummy mock results
-  const mockResults = [
-    { name: query, type: 'artist' },
-    { name: `${query} & The Band`, type: 'artist' },
-    { name: `Lil ${query}`, type: 'artist' }
-  ];
-  res.json(mockResults);
-});
 
 // --- DISCOVERY ENGINE ---
 // Phase 3: Mathematical Similarity Percentage Rank
