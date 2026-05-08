@@ -13,7 +13,7 @@ export default function AdminDash({ user, token }: { user: any, token: string })
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/admin/stats');
+      const res = await fetch('/api/admin/stats', { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       setStats(data);
     } catch (err) {
@@ -23,7 +23,7 @@ export default function AdminDash({ user, token }: { user: any, token: string })
 
   const fetchQueue = async () => {
     try {
-      const res = await fetch('/api/admin/review-queue');
+      const res = await fetch('/api/admin/review-queue', { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       setQueue(data);
     } catch (err) {
@@ -38,7 +38,7 @@ export default function AdminDash({ user, token }: { user: any, token: string })
     try {
       await fetch('/api/admin/ban', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ userId, isBanned: true })
       });
       alert('USER BAN VERIFIED.');

@@ -23,6 +23,23 @@ export default function App() {
   const [viewProfileId, setViewProfileId] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 403) {
+        const data = await response.clone().json().catch(() => ({}));
+        if (data.error === 'Account banned.') {
+          alert('YOUR ACCOUNT HAS BEEN BANNED BY A MODERATOR.');
+          localStorage.clear();
+          window.location.reload();
+        }
+      }
+      return response;
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
+
   const navigateTo = (tab: typeof activeTab, postId: number | null = null, profileId: number | null = null) => {
     setNavHistory(prev => [...prev, { tab: activeTab, postId: selectedPostId || undefined, profileId: viewProfileId || undefined }]);
     setActiveTab(tab);
