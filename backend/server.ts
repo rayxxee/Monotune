@@ -844,6 +844,19 @@ const { trackName, artistName, backgroundColor, spotifyTrackId, imageUrl } = req
   }
 });
 
+app.delete('/api/stories/:id', requireAuth, async (req: any, res) => {
+  try {
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ error: 'Story not found.' });
+    if (story.user_id.toString() !== req.userId && !req.isAdmin) return res.status(403).json({ error: 'Forbidden.' });
+
+    await Story.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete story.' });
+  }
+});
+
 // --- CHAT ROUTES ---
 app.get('/api/chats/inbox', requireAuth, async (req: any, res) => {
   try {

@@ -29,6 +29,20 @@ export default function Stories({ user, token, onNavigateToChat, onNavigateToPro
     } catch (e) {}
   };
 
+  const handleDeleteStory = async (storyId: string) => {
+    if (!confirm('DELETE THIS STORY?')) return;
+    try {
+      const res = await fetch(`/api/stories/${storyId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setStories(prev => prev.filter(s => s.id !== storyId));
+        setActiveStory(null);
+      }
+    } catch (e) {}
+  };
+
   const handlePostStory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTrack && !newImage) return;
@@ -171,9 +185,16 @@ export default function Stories({ user, token, onNavigateToChat, onNavigateToPro
                     </span>
                   </div>
                 </div>
-                <button onClick={() => setActiveStory(null)} className="text-white hover:text-red-500">
-                  <X size={24} />
-                </button>
+                <div className="flex items-center gap-4">
+                  {activeStory.user_id === user.id && (
+                    <button onClick={() => handleDeleteStory(activeStory.id)} className="text-white hover:text-red-500 font-bold text-[10px] uppercase tracking-widest mt-1">
+                      DELETE
+                    </button>
+                  )}
+                  <button onClick={() => setActiveStory(null)} className="text-white hover:text-red-500">
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col items-center justify-center flex-1 relative z-10 gap-6 w-full h-full">
