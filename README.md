@@ -53,6 +53,15 @@ The frontend will be available at **http://localhost:5173** and the backend API 
 
 ---
 
+### Toxicity Moderation Service (Optional)
+Monotune features an AI-powered content moderation system that flags toxic comments and posts.
+By default, the backend will attempt to connect to a local moderation service running on `http://localhost:5000/predict`.
+
+If the service is not running or unreachable, the system fails open (all content is allowed and marked `is_toxic: false`).
+To enable full AI moderation, ensure the toxicity classification backend is deployed locally or update the `TOXICITY_API_URL` environment variable if you have deployed it remotely.
+
+---
+
 ### Test Accounts
 You can log in with any of these seeded test accounts:
 - `alice@example.com`
