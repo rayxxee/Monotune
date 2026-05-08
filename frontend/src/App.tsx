@@ -22,6 +22,7 @@ export default function App() {
   const [navHistory, setNavHistory] = useState<{tab: typeof activeTab, postId?: number, profileId?: number}[]>([]);
   const [viewProfileId, setViewProfileId] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [notificationCounts, setNotificationCounts] = useState({ messages: 0, connections: 0 });
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -39,6 +40,24 @@ export default function App() {
     };
     return () => { window.fetch = originalFetch; };
   }, []);
+
+  useEffect(() => {
+    if (step !== 'FEED' || !token) return;
+
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch('/api/notifications/counts', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setNotificationCounts(data);
+        }
+      } catch (err) {}
+    };
+
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 5000);
+    return () => clearInterval(interval);
+  }, [step, token]);
 
   const navigateTo = (tab: typeof activeTab, postId: number | null = null, profileId: number | null = null) => {
     setNavHistory(prev => [...prev, { tab: activeTab, postId: selectedPostId || undefined, profileId: viewProfileId || undefined }]);
@@ -123,15 +142,21 @@ export default function App() {
           </button>
           <button 
             onClick={() => navigateTo('CHATS')}
-            className={`flex items-center gap-2 hover:underline ${activeTab === 'CHATS' ? 'underline decoration-4 underline-offset-8' : ''}`}
+            className={`flex items-center gap-2 hover:underline relative ${activeTab === 'CHATS' ? 'underline decoration-4 underline-offset-8' : ''}`}
           >
             <MessageSquare size={16} /> COMMS
+            {notificationCounts.messages > 0 && (
+              <span className="absolute -top-3 -right-3 bg-black text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">{notificationCounts.messages}</span>
+            )}
           </button>
           <button 
             onClick={() => navigateTo('CONNECTIONS')}
-            className={`flex items-center gap-2 hover:underline ${activeTab === 'CONNECTIONS' ? 'underline decoration-4 underline-offset-8' : ''}`}
+            className={`flex items-center gap-2 hover:underline relative ${activeTab === 'CONNECTIONS' ? 'underline decoration-4 underline-offset-8' : ''}`}
           >
             <Users size={16} /> CONNECT
+            {notificationCounts.connections > 0 && (
+              <span className="absolute -top-3 -right-3 bg-black text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">{notificationCounts.connections}</span>
+            )}
           </button>
           <button 
             onClick={() => navigateTo('PROFILE', null, user?.id)}
@@ -185,15 +210,21 @@ export default function App() {
           </button>
           <button 
             onClick={() => navigateTo('CHATS')}
-            className={`flex items-center gap-4 hover:text-cyan-500 w-full justify-center ${activeTab === 'CHATS' ? 'text-cyan-500' : ''}`}
+            className={`flex items-center gap-4 hover:text-cyan-500 w-full justify-center relative ${activeTab === 'CHATS' ? 'text-cyan-500' : ''}`}
           >
             <MessageSquare size={24} /> COMMS
+            {notificationCounts.messages > 0 && (
+              <span className="bg-white text-black text-xs px-2 py-1 ml-2 font-bold">{notificationCounts.messages}</span>
+            )}
           </button>
           <button 
             onClick={() => navigateTo('CONNECTIONS')}
-            className={`flex items-center gap-4 hover:text-cyan-500 w-full justify-center ${activeTab === 'CONNECTIONS' ? 'text-cyan-500' : ''}`}
+            className={`flex items-center gap-4 hover:text-cyan-500 w-full justify-center relative ${activeTab === 'CONNECTIONS' ? 'text-cyan-500' : ''}`}
           >
             <Users size={24} /> CONNECT
+            {notificationCounts.connections > 0 && (
+              <span className="bg-white text-black text-xs px-2 py-1 ml-2 font-bold">{notificationCounts.connections}</span>
+            )}
           </button>
           <button 
             onClick={() => navigateTo('PROFILE', null, user?.id)}

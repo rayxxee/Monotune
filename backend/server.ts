@@ -64,6 +64,17 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// --- NOTIFICATIONS ---
+app.get('/api/notifications/counts', requireAuth, async (req: any, res) => {
+  try {
+    const unreadMessages = await Message.countDocuments({ receiver_id: req.userId, is_read: false });
+    const pendingConnections = await Friendship.countDocuments({ user_id_2: req.userId, status: 'pending' });
+    res.json({ messages: unreadMessages, connections: pendingConnections });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notification counts.' });
+  }
+});
+
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
