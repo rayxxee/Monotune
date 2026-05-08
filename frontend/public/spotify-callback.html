@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Monotune — Spotify Connected</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+    h2 { font-size: 24px; margin-bottom: 12px; letter-spacing: 4px; }
+    p { font-size: 14px; margin-bottom: 8px; text-transform: uppercase; }
+    .artists { color: #22d3ee; font-weight: bold; }
+    .closing { opacity: 0.4; font-size: 11px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div>
+    <h2>✓ SPOTIFY CONNECTED</h2>
+    <p>TOP ARTISTS SYNCED:</p>
+    <p class="artists" id="artist-list">Loading...</p>
+    <p class="closing">This window will close automatically...</p>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('spotify');
+    let artists = [];
+    try {
+      artists = JSON.parse(params.get('artists') || '[]');
+    } catch(e) {}
+
+    document.getElementById('artist-list').textContent = artists.length > 0
+      ? artists.join(' · ')
+      : 'None found for the last month';
+
+    if (status === 'success') {
+      // Write to localStorage so the parent window can detect the result
+      localStorage.setItem('spotify_connected', JSON.stringify({
+        artists: artists,
+        time: Date.now()
+      }));
+    }
+
+    setTimeout(function() { window.close(); }, 2000);
+  </script>
+</body>
+</html>
