@@ -16,6 +16,8 @@ export interface IUser extends Document {
   favorite_genre?: string;
   spotify_connected: boolean;
   profile_images?: string[];
+  is_verified: boolean;
+  verification_token?: string;
 }
 
 const UserSchema = new Schema({
@@ -34,6 +36,8 @@ const UserSchema = new Schema({
   favorite_genre: String,
   spotify_connected: { type: Boolean, default: false },
   profile_images: { type: [String], default: [] },
+  is_verified: { type: Boolean, default: false },
+  verification_token: String,
 }, { timestamps: true });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

@@ -312,28 +312,42 @@ export default function Settings({ user, token, onLogout }: { user: any, token: 
           <div className="p-6 brutalist-border bg-grey-silver flex flex-col gap-6">
             <h3 className="text-2xl font-black tracking-tighter uppercase">SONIC IDENTITY</h3>
             
-            <div className="flex flex-col gap-4">
-              <label className="text-xs font-bold tracking-[0.4em] uppercase text-grey-mid">EXTERNAL DB QUERY</label>
+            <div className="flex flex-col gap-2 mb-2">
+              <label className="text-xs font-bold tracking-[0.4em] uppercase text-grey-mid">SPOTIFY ARTIST SEARCH</label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
                   value={query}
                   onChange={e => setQuery(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!query) return;
+                      try {
+                        const res = await fetch(`/api/music/search?q=${encodeURIComponent(query)}`);
+                        const data = await res.json();
+                        setResults(data);
+                      } catch(err) {}
+                    }
+                  }}
                   placeholder="SEARCH ARTISTS..."
                   className="flex-1 brutalist-input p-2 font-bold uppercase"
                 />
                 <button onClick={handleSearch} type="button" className="brutalist-button px-4 py-2 flex items-center justify-center"><Search size={16} /></button>
               </div>
               {results.length > 0 && (
-                <div className="flex flex-col gap-2 mt-2 bg-white brutalist-border p-2">
+                <div className="flex flex-col gap-1 mt-2 bg-white brutalist-border p-2 max-h-40 overflow-y-auto">
                   {results.map((r, i) => (
                     <button 
                       key={i} 
                       type="button"
                       onClick={() => addResultToArtists(r.name)}
-                      className="text-left font-bold text-sm hover:bg-black hover:text-white p-2 uppercase"
+                      className="text-left font-bold text-sm hover:bg-black hover:text-white p-2 uppercase flex items-center gap-3 transition-colors"
                     >
-                      + {r.name}
+                      {r.image && (
+                        <img src={r.image} className="w-8 h-8 object-cover border border-black shrink-0" alt="" />
+                      )}
+                      <span className="truncate">{r.name}</span>
                     </button>
                   ))}
                 </div>

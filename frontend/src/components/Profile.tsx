@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, UserPlus, Music, Users, ShieldCheck, Check, X, UserMinus, ArrowLeft, MessageCircle, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { User, UserPlus, Music, Users, ShieldCheck, Check, X, UserMinus, ArrowLeft, MessageCircle, Image as ImageIcon, Trash2, Radio } from 'lucide-react';
 
 const SpotifyAutoplayer = ({ trackId }: { trackId: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +62,7 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
+  const [myStory, setMyStory] = useState<any>(null);
 
   useEffect(() => {
     fetchProfileData();
@@ -88,6 +89,15 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
       setFriends(friendsData);
       setPending(pendingData);
       setPosts(postsData);
+      
+      // Fetch own story if viewing own profile
+      if (currentUser.id === userId) {
+        try {
+          const storyRes = await fetch('/api/stories/me', { headers: { 'Authorization': `Bearer ${token}` } });
+          const storyData = await storyRes.json();
+          setMyStory(storyData);
+        } catch (e) { setMyStory(null); }
+      }
     } catch (err) {
       console.error('Error fetching profile data');
     } finally {
@@ -297,6 +307,41 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
             )}
           </div>
         </div>
+
+        {/* MY ACTIVE STORY (Own profile only) */}
+        {isOwnProfile && myStory && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-2xl font-black uppercase border-b-4 border-black pb-2">
+              <Radio size={24} /> ACTIVE STORY
+            </div>
+            <div className="brutalist-border-thick p-6 flex items-center gap-6 bg-black text-white" style={{ background: `linear-gradient(135deg, ${myStory.background_color || '#000'}, #000)` }}>
+              {myStory.image_url && (
+                <div className="w-24 h-24 shrink-0 border-2 border-white overflow-hidden">
+                  <img src={myStory.image_url} className="w-full h-full object-cover" />
+                </div>
+              )}
+              <div className="flex-1 overflow-hidden">
+                {myStory.track_name && <h4 className="text-xl font-black uppercase truncate">{myStory.track_name}</h4>}
+                {myStory.artist_name && <p className="text-xs font-bold uppercase tracking-widest text-white/60 truncate">{myStory.artist_name}</p>}
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-2">
+                  EXPIRES {new Date(myStory.expires_at).toLocaleString()}
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm('DELETE YOUR ACTIVE STORY?')) return;
+                  try {
+                    const res = await fetch(`/api/stories/${myStory.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                    if (res.ok) setMyStory(null);
+                  } catch (e) {}
+                }}
+                className="shrink-0 text-white hover:text-red-500 font-bold text-xs uppercase tracking-widest border border-white/30 px-4 py-2 hover:border-red-500 transition-colors"
+              >
+                DELETE
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* PROFILE VISUAL SHOWCASE */}
         {profile.profile_images && profile.profile_images.length > 0 && (

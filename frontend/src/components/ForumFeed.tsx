@@ -16,15 +16,29 @@ export default function ForumFeed({ user, token, onSelectThread, onNavigateToPro
   const [showExtras, setShowExtras] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    fetchPosts();
+    fetchPosts(1, true);
   }, []);
 
-  const fetchPosts = async () => {
-    const res = await fetch('/api/posts');
-    const data = await res.json();
-    setPosts(data);
+  const fetchPosts = async (page = 1, reset = false) => {
+    if (page > 1) setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/posts?page=${page}&limit=20`);
+      const data = await res.json();
+      if (reset) {
+        setPosts(data.data || []);
+      } else {
+        setPosts(prev => [...prev, ...(data.data || [])]);
+      }
+      setCurrentPage(data.page || 1);
+      setTotalPages(data.totalPages || 1);
+    } catch (err) {} finally {
+      setLoadingMore(false);
+    }
   };
 
   const handlePost = async (e: React.FormEvent) => {
@@ -70,7 +84,7 @@ export default function ForumFeed({ user, token, onSelectThread, onNavigateToPro
       setNewImageFile(null);
       setSelectedTrack(null);
       setShowExtras(false);
-      fetchPosts();
+      fetchPosts(1, true);
     } catch (err: any) {
       setError('FAILED TO BROADCAST SIGNAL.');
     } finally {
@@ -277,6 +291,17 @@ export default function ForumFeed({ user, token, onSelectThread, onNavigateToPro
               </motion.div>
             ))}
           </div>
+
+          {/* LOAD MORE */}
+          {currentPage < totalPages && (
+            <button
+              onClick={() => fetchPosts(currentPage + 1)}
+              disabled={loadingMore}
+              className="brutalist-button py-4 w-full text-center"
+            >
+              {loadingMore ? 'LOADING...' : 'LOAD MORE SIGNALS'}
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, Music, Check, CheckCheck, Search, X, ArrowLeft } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
 
 export default function ChatHub({ user, token, onNavigateToProfile, initialChatId, onBack }: { user: any, token: string, onNavigateToProfile?: (id: string) => void, initialChatId?: string | null, onBack?: () => void }) {
   const [inboxList, setInboxList] = useState<any[]>([]);
@@ -11,6 +12,11 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
   const [loading, setLoading] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [msgPage, setMsgPage] = useState(1);
+  const [msgTotalPages, setMsgTotalPages] = useState(1);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const isInitialLoad = useRef(true);
+  const socketRef = useRef<Socket | null>(null);
 
   // Song search modal state
   const [showSongSearch, setShowSongSearch] = useState(false);
@@ -43,14 +49,55 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
     }
   }, [initialChatId, inboxList, requestsList]);
 
+  // Socket.IO initialization
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    socketRef.current = io('/', { auth: { token } });
+    return () => { socketRef.current?.disconnect(); };
+  }, [token]);
+
+  // Socket.IO listeners
+  useEffect(() => {
+    if (!socketRef.current) return;
+    const handleNewMessage = (msg: any) => {
+      // Refresh inbox list to reflect newest message
+      fetchFriends();
+      if (!activeChat) return;
+      if (msg.sender_id === activeChat.id || msg.receiver_id === activeChat.id || msg.sender_id === user.id) {
+        setMessages(prev => {
+          if (prev.find(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        if (msg.sender_id === activeChat.id) {
+          fetch(`/api/messages/${activeChat.id}/read`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).catch(() => {});
+        }
+      }
+    };
+
+    const handleMessagesRead = (data: { readerId: string }) => {
+      if (!activeChat) return;
+      if (data.readerId === activeChat.id) {
+        setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
+      }
+    };
+
+    socketRef.current.on('new_message', handleNewMessage);
+    socketRef.current.on('messages_read', handleMessagesRead);
+    return () => { 
+      socketRef.current?.off('new_message', handleNewMessage); 
+      socketRef.current?.off('messages_read', handleMessagesRead); 
+    };
+  }, [activeChat, token]);
+
+  // Load initial messages for active chat
+  useEffect(() => {
     if (activeChat) {
+      isInitialLoad.current = true;
+      setMsgPage(1);
       fetchMessages();
-      // Simple long-polling for now since Socket.io isn't set up on backend
-      interval = setInterval(fetchMessages, 3000);
     }
-    return () => clearInterval(interval);
   }, [activeChat]);
 
   const fetchFriends = async () => {
@@ -70,11 +117,12 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
   const fetchMessages = async () => {
     if (!activeChat) return;
     try {
-      const res = await fetch(`/api/chats/${activeChat.id}`, {
+      const res = await fetch(`/api/chats/${activeChat.id}?page=1&limit=50`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      setMessages(data);
+      setMessages(data.data || []);
+      setMsgTotalPages(data.totalPages || 1);
       
       // Mark as read
       fetch(`/api/messages/${activeChat.id}/read`, {
@@ -84,6 +132,22 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
       
     } catch (err) {
       console.error('Failed to sync messages');
+    }
+  };
+
+  const loadEarlierMessages = async () => {
+    if (!activeChat || msgPage >= msgTotalPages) return;
+    setLoadingEarlier(true);
+    try {
+      const nextPage = msgPage + 1;
+      const res = await fetch(`/api/chats/${activeChat.id}?page=${nextPage}&limit=50`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setMessages(prev => [...(data.data || []), ...prev]);
+      setMsgPage(nextPage);
+    } catch (err) {} finally {
+      setLoadingEarlier(false);
     }
   };
 
@@ -120,7 +184,6 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
         })
       });
       setNewMessage('');
-      fetchMessages();
     } catch (err) {
       console.error('Transmission failed');
     }
@@ -261,6 +324,16 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col gap-4 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIj48L3JlY3Q+CjxwYXRoIGQ9Ik0wIDBMNCA0Wk00IDBMMCA0WiIgc3Ryb2tlPSIjZWVlIiBzdHJva2Utd2lkdGg9IjEiPjwvcGF0aD4KPC9zdmc+')]">
+              {/* Load Earlier Messages */}
+              {msgPage < msgTotalPages && (
+                <button
+                  onClick={loadEarlierMessages}
+                  disabled={loadingEarlier}
+                  className="self-center text-[10px] font-bold uppercase tracking-widest bg-white border border-black px-4 py-2 hover:bg-black hover:text-white transition-colors mb-2"
+                >
+                  {loadingEarlier ? 'LOADING...' : 'LOAD EARLIER MESSAGES'}
+                </button>
+              )}
               {messages.length === 0 ? (
                 <div className="m-auto text-center font-bold text-xs tracking-widest text-grey-mid uppercase bg-white p-4 border border-black shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
                   INITIALIZE COMM SEQUENCE.

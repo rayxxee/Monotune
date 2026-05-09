@@ -5,10 +5,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
 // Import DB Module
 import { connectDB, User, Post, Comment, Friendship, Message, Story, Block, Encore, Image } from './db/index';
@@ -20,6 +24,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = http.createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: { origin: '*' }
+});
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'monutune_secret_signal';
 
@@ -27,6 +35,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'monutune_secret_signal';
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// --- RATE LIMITING ---
+const generalLimiter = rateLimit({ windowMs: 60 * 1000, max: 100, message: { error: 'Too many requests. Slow down.' } });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many auth attempts. Try again later.' } });
+const uploadLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Too many uploads. Slow down.' } });
+app.use('/api/', generalLimiter);
 
 // --- AUTH MIDDLEWARE ---
 const requireAuth = async (req: any, res: any, next: any) => {
@@ -81,7 +95,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-app.post('/api/upload', requireAuth, upload.single('image'), async (req: any, res) => {
+app.post('/api/upload', requireAuth, uploadLimiter, upload.single('image'), async (req: any, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No image provided' });
     const image = await Image.create({
@@ -154,11 +168,33 @@ app.delete('/api/users/:id/profile-picture', requireAuth, async (req: any, res) 
   }
 });
 
+// --- WEBSOCKETS ---
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) return next(new Error('Authentication error'));
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET || 'monutune_secret_signal';
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    socket.data.userId = decoded.id;
+    next();
+  } catch (err) {
+    next(new Error('Authentication error'));
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.join(socket.data.userId);
+
+  socket.on('disconnect', () => {
+    // disconnected
+  });
+});
+
 // --- SERVER STARTUP ---
 async function startServer() {
   await connectDB(); 
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log('--- MONUTUNE CORE ACTIVE ---');
     console.log(`Server: http://localhost:${PORT}`);
   });
@@ -166,20 +202,25 @@ async function startServer() {
 
 // --- AUTHENTICATION ROUTES ---
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { username, email, password } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ username, email, password_hash: hashedPassword });
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const user = await User.create({ username, email, password_hash: hashedPassword, verification_token: verificationToken });
+    
+    // Log verification URL (swap with real email service in production)
+    const verifyUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
+    console.log(`[EMAIL VERIFICATION] ${email} → ${verifyUrl}`);
     
     const token = jwt.sign({ id: user._id, username }, JWT_SECRET);
-    res.json({ token, user: { id: user._id, username, email, hasOnboarded: false } });
+    res.json({ token, user: { id: user._id, username, email, hasOnboarded: false, is_verified: false } });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Registration failed.' });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
@@ -193,9 +234,23 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET);
-    res.json({ token, user: { id: user._id, username: user.username, email: user.email, hasOnboarded: user.top_artists.length > 0 } });
+    res.json({ token, user: { id: user._id, username: user.username, email: user.email, hasOnboarded: user.top_artists.length > 0, is_verified: user.is_verified } });
   } catch (err: any) {
     res.status(500).json({ error: 'Login failed.' });
+  }
+});
+
+// --- EMAIL VERIFICATION ---
+app.get('/api/auth/verify/:token', async (req, res) => {
+  try {
+    const user = await User.findOne({ verification_token: req.params.token });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired verification token.' });
+    user.is_verified = true;
+    user.verification_token = undefined;
+    await user.save();
+    res.json({ success: true, message: 'Email verified successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Verification failed.' });
   }
 });
 
@@ -446,9 +501,15 @@ app.post('/api/posts', requireAuth, async (req: any, res) => {
 
 app.get('/api/posts', async (req, res) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const total = await Post.countDocuments({ is_toxic: false });
     const posts = await Post.find({ is_toxic: false })
       .populate('user_id', 'username profile_picture')
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
       
     const formattedPosts = posts.map(p => ({
@@ -459,7 +520,7 @@ app.get('/api/posts', async (req, res) => {
       profile_picture: (p.user_id as any).profile_picture,
       created_at: p.createdAt
     }));
-    res.json(formattedPosts);
+    res.json({ data: formattedPosts, page, totalPages: Math.ceil(total / limit), total });
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve signal stream.' });
   }
@@ -857,6 +918,19 @@ app.delete('/api/stories/:id', requireAuth, async (req: any, res) => {
   }
 });
 
+// Get current user's active story (for Profile page)
+app.get('/api/stories/me', requireAuth, async (req: any, res) => {
+  try {
+    const now = new Date();
+    const story = await Story.findOne({ user_id: req.userId, expires_at: { $gt: now } })
+      .sort({ createdAt: -1 }).lean();
+    if (!story) return res.json(null);
+    res.json({ ...story, id: story._id, created_at: story.createdAt });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch your story.' });
+  }
+});
+
 // --- CHAT ROUTES ---
 app.get('/api/chats/inbox', requireAuth, async (req: any, res) => {
   try {
@@ -914,16 +988,29 @@ const currentUserId = decoded.id;
 app.get('/api/chats/:friendId', requireAuth, async (req: any, res) => {
   try {
     const decoded = { id: req.userId, username: req.username };
-const currentUserId = decoded.id;
+    const currentUserId = decoded.id;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
     
-    const messages = await Message.find({
+    const query = {
       $or: [
         { sender_id: currentUserId, receiver_id: req.params.friendId },
         { sender_id: req.params.friendId, receiver_id: currentUserId }
       ]
-    }).sort({ createdAt: 1 }).lean();
+    };
+    const total = await Message.countDocuments(query);
+    const totalPages = Math.ceil(total / limit);
+    // For messages, page 1 = newest. We skip from the end.
+    const skip = Math.max(0, total - (page * limit));
+    const fetchLimit = page === totalPages ? total - ((totalPages - 1) * limit) : limit;
     
-    res.json(messages.map(m => ({...m, id: m._id, created_at: m.createdAt})));
+    const messages = await Message.find(query)
+      .sort({ createdAt: 1 })
+      .skip(skip < 0 ? 0 : skip)
+      .limit(fetchLimit)
+      .lean();
+    
+    res.json({ data: messages.map(m => ({...m, id: m._id, created_at: m.createdAt})), page, totalPages, total });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch messages.' });
   }
@@ -932,10 +1019,10 @@ const currentUserId = decoded.id;
 app.post('/api/chats/:friendId', requireAuth, async (req: any, res) => {
   try {
     const decoded = { id: req.userId, username: req.username };
-const currentUserId = decoded.id;
+    const currentUserId = decoded.id;
     const { content, spotifyTrackId, messageType, reactionTrackId, trackName, trackArtist, trackImage } = req.body;
     
-    await Message.create({
+    const msg = await Message.create({
       sender_id: currentUserId,
       receiver_id: req.params.friendId,
       content,
@@ -946,7 +1033,14 @@ const currentUserId = decoded.id;
       track_artist: trackArtist || null,
       track_image: trackImage || null
     });
-    res.json({ success: true });
+
+    const formattedMsg = { ...msg.toObject(), id: msg._id, created_at: msg.createdAt };
+    
+    // Emit real-time message to the receiver and the sender
+    io.to(req.params.friendId).emit('new_message', formattedMsg);
+    io.to(currentUserId).emit('new_message', formattedMsg);
+
+    res.json({ success: true, message: formattedMsg });
   } catch (err) {
     res.status(500).json({ error: 'Message failed.' });
   }
@@ -955,10 +1049,16 @@ const currentUserId = decoded.id;
 app.patch('/api/messages/:friendId/read', requireAuth, async (req: any, res) => {
   try {
     const decoded = { id: req.userId, username: req.username };
-await Message.updateMany(
+    await Message.updateMany(
       { sender_id: req.params.friendId, receiver_id: decoded.id },
       { $set: { is_read: true } }
     );
+    
+    // Tell the sender that the messages they sent have been read
+    io.to(req.params.friendId).emit('messages_read', {
+      readerId: decoded.id
+    });
+    
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to mark read.' });
