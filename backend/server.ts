@@ -647,6 +647,80 @@ const blocks = await Block.find({ blocker_id: decoded.id })
   }
 });
 
+// --- FRIENDSHIPS ---
+app.post('/api/friendships/request', requireAuth, async (req: any, res) => {
+  try {
+    const { userId1, userId2 } = req.body;
+    const currentUserId = req.userId;
+    if (userId1 !== currentUserId) return res.status(403).json({ error: 'Forbidden' });
+    
+    const existing = await Friendship.findOne({
+      $or: [
+        { user_id_1: userId1, user_id_2: userId2 },
+        { user_id_1: userId2, user_id_2: userId1 }
+      ]
+    });
+    if (existing) return res.json({ success: true });
+
+    const u1 = await User.findById(userId1);
+    const u2 = await User.findById(userId2);
+    if (!u1 || !u2) return res.status(404).json({ error: 'User not found' });
+    const score = calculateRank(u1.top_artists, u2.top_artists);
+
+    await Friendship.create({
+      user_id_1: userId1,
+      user_id_2: userId2,
+      status: 'pending',
+      similarity_score: score
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send request.' });
+  }
+});
+
+app.post('/api/friendships/respond', requireAuth, async (req: any, res) => {
+  try {
+    const { friendshipId, status } = req.body;
+    const currentUserId = req.userId;
+    
+    const friendship = await Friendship.findById(friendshipId);
+    if (!friendship) return res.status(404).json({ error: 'Not found' });
+    if (friendship.user_id_2.toString() !== currentUserId && !req.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+
+    if (status === 'accepted') {
+      friendship.status = 'accepted';
+      await friendship.save();
+    } else {
+      await Friendship.findByIdAndDelete(friendshipId);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to respond.' });
+  }
+});
+
+app.post('/api/friendships/unfriend', requireAuth, async (req: any, res) => {
+  try {
+    const { userId1, userId2 } = req.body;
+    const currentUserId = req.userId;
+    if (userId1 !== currentUserId && !req.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+
+    await Friendship.deleteMany({
+      $or: [
+        { user_id_1: userId1, user_id_2: userId2 },
+        { user_id_1: userId2, user_id_2: userId1 }
+      ]
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to unfriend.' });
+  }
+});
+
 // Get User Friends / Connections
 app.get('/api/users/:id/friends', async (req, res) => {
   try {

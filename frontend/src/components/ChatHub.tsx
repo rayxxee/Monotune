@@ -51,7 +51,8 @@ export default function ChatHub({ user, token, onNavigateToProfile, initialChatI
 
   // Socket.IO initialization
   useEffect(() => {
-    socketRef.current = io('/', { auth: { token } });
+    const socketUrl = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000' : 'https://monotune-api.onrender.com');
+    socketRef.current = io(socketUrl, { auth: { token } });
     return () => { socketRef.current?.disconnect(); };
   }, [token]);
 

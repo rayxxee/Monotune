@@ -149,9 +149,10 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
 
   const handleSpotify = async () => {
     try {
+      const popup = window.open('about:blank', 'Spotify Login', 'width=500,height=700');
       const res = await fetch(`/api/auth/spotify?userId=${currentUser.id}`);
       const data = await res.json();
-      const popup = window.open(data.url, 'Spotify Login', 'width=500,height=700');
+      if (popup) popup.location.href = data.url;
       
       // Listen for localStorage change from the callback page
       const handler = (event: StorageEvent) => {

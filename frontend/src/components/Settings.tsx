@@ -373,9 +373,10 @@ export default function Settings({ user, token, onLogout }: { user: any, token: 
                 type="button"
                 onClick={async () => {
                   try {
+                    const popup = window.open('about:blank', 'Spotify Sync', 'width=500,height=700');
                     const res = await fetch(`/api/auth/spotify?userId=${user.id}`);
                     const data = await res.json();
-                    const popup = window.open(data.url, 'Spotify Sync', 'width=500,height=700');
+                    if (popup) popup.location.href = data.url;
                     
                     const handler = (event: StorageEvent) => {
                       if (event.key === 'spotify_connected') {
