@@ -31,7 +31,7 @@ function ThreadDetailRoute({ user, token }: { user: any; token: string }) {
   );
 }
 
-function ProfileRoute({ user, token }: { user: any; token: string }) {
+function ProfileRoute({ user, token, onSyncUser }: { user: any; token: string; onSyncUser: () => void }) {
   const { id } = useParams();
   const navigate = useNavigate();
   return (
@@ -43,6 +43,7 @@ function ProfileRoute({ user, token }: { user: any; token: string }) {
         onBack={() => navigate(-1)}
         onNavigateToChat={(chatId: string) => navigate(`/chats/${chatId}`)}
         onSelectThread={(threadId: number) => navigate(`/feed/${threadId}`)}
+        onSyncUser={onSyncUser}
       />
     </ErrorBoundary>
   );
@@ -195,7 +196,21 @@ export default function App() {
     }
   };
 
+  const syncUser = async () => {
+    if (!token || !user) return;
+    try {
+      const res = await fetch(`/api/users/${user.id}`);
+      if (res.ok) {
+        const updatedUser = await res.json();
+        const mergedUser = { ...user, ...updatedUser };
+        setUser(mergedUser);
+        localStorage.setItem('monutune_user', JSON.stringify(mergedUser));
+      }
+    } catch (err) {}
+  };
+
   const handleOnboardingComplete = () => {
+    syncUser();
     setStep('FEED');
     navigate('/discover');
   };
@@ -344,12 +359,12 @@ export default function App() {
           <Route path="/feed/:postId" element={<ThreadDetailRoute user={user} token={token!} />} />
           <Route path="/chats" element={<ChatRoute user={user} token={token!} />} />
           <Route path="/chats/:friendId" element={<ChatRoute user={user} token={token!} />} />
-          <Route path="/profile/:id" element={<ProfileRoute user={user} token={token!} />} />
+          <Route path="/profile/:id" element={<ProfileRoute user={user} token={token!} onSyncUser={syncUser} />} />
           <Route path="/connections" element={
             <ErrorBoundary><Connections user={user} token={token!} onNavigateToProfile={(id: string) => navigate(`/profile/${id}`)} /></ErrorBoundary>
           } />
           <Route path="/settings" element={
-            <ErrorBoundary><Settings user={user} token={token!} onLogout={logout} /></ErrorBoundary>
+            <ErrorBoundary><Settings user={user} token={token!} onLogout={logout} onSyncUser={syncUser} /></ErrorBoundary>
           } />
           <Route path="/admin" element={
             <ErrorBoundary><AdminDash user={user} token={token!} /></ErrorBoundary>

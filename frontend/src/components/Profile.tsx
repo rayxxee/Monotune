@@ -54,7 +54,7 @@ const SpotifyAutoplayer = ({ trackId }: { trackId: string }) => {
   return <div ref={containerRef} className="w-full h-[80px]"></div>;
 };
 
-export default function Profile({ currentUser, userId, token, onBack, onNavigateToChat, onSelectThread }: { currentUser: any, userId: number, token: string, onBack?: () => void, onNavigateToChat?: (id: string) => void, onSelectThread?: (id: number) => void }) {
+export default function Profile({ currentUser, userId, token, onBack, onNavigateToChat, onSelectThread, onSyncUser }: { currentUser: any, userId: number, token: string, onBack?: () => void, onNavigateToChat?: (id: string) => void, onSelectThread?: (id: number) => void, onSyncUser?: () => void }) {
   const isOwnProfile = currentUser.id === userId;
   const [profile, setProfile] = useState<any>(null);
   const [friends, setFriends] = useState<any[]>([]);
@@ -159,7 +159,8 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
         if (event.key === 'spotify_connected') {
           window.removeEventListener('storage', handler);
           localStorage.removeItem('spotify_connected');
-          fetchProfileData(); // Refresh profile to show new artists
+          fetchProfileData(); 
+          onSyncUser?.();
         }
       };
       window.addEventListener('storage', handler);
@@ -169,8 +170,11 @@ export default function Profile({ currentUser, userId, token, onBack, onNavigate
         if (popup && popup.closed) {
           clearInterval(pollTimer);
           window.removeEventListener('storage', handler);
-          localStorage.removeItem('spotify_connected');
-          fetchProfileData();
+          if (localStorage.getItem('spotify_connected')) {
+             localStorage.removeItem('spotify_connected');
+             fetchProfileData();
+             onSyncUser?.();
+          }
         }
       }, 500);
     } catch (e) {

@@ -1252,8 +1252,11 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
 
     const artistNames = topArtistsData.items?.map((a: any) => a.name) || [];
 
-    if (artistNames.length > 0 && userId) {
-      await User.findByIdAndUpdate(userId, { top_artists: artistNames, spotify_connected: true });
+    if (userId) {
+      await User.findByIdAndUpdate(userId, { 
+        top_artists: artistNames.length > 0 ? artistNames : undefined, 
+        spotify_connected: true 
+      });
     }
 
     // Redirect to the frontend with success data as query params

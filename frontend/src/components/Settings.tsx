@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, LogOut, AlertTriangle, Search, Music, X, Camera, Trash2 } from 'lucide-react';
 
-export default function Settings({ user, token, onLogout }: { user: any, token: string, onLogout: () => void }) {
+export default function Settings({ user, token, onLogout, onSyncUser }: { user: any, token: string, onLogout: () => void, onSyncUser: () => void }) {
   const [email, setEmail] = useState(user.email);
   const [password, setPassword] = useState('');
   const [threshold, setThreshold] = useState(user.min_similarity_threshold || 0);
@@ -18,6 +18,17 @@ export default function Settings({ user, token, onLogout }: { user: any, token: 
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [profileImages, setProfileImages] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (user.top_artists) setArtists(user.top_artists);
+    setLinerNotes(user.liner_notes || '');
+    setFavoriteGenre(user.favorite_genre || '');
+    setAnthemTrackId(user.sonic_anthem_track_id || '');
+    setAnthemName(user.sonic_anthem_name || '');
+    setSpotifyConnected(user.spotify_connected || false);
+    setProfilePicture(user.profile_picture || null);
+    setProfileImages(user.profile_images || []);
+  }, [user]);
   const [pfpUploading, setPfpUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -381,15 +392,8 @@ export default function Settings({ user, token, onLogout }: { user: any, token: 
                     const handler = (event: StorageEvent) => {
                       if (event.key === 'spotify_connected') {
                         window.removeEventListener('storage', handler);
-                        try {
-                          const result = JSON.parse(event.newValue || '{}');
-                          if (result.artists) {
-                            const newArtists = [...result.artists];
-                            while (newArtists.length < 5) newArtists.push('');
-                            setArtists(newArtists.slice(0, 5));
-                          }
-                        } catch(e) {}
                         localStorage.removeItem('spotify_connected');
+                        onSyncUser();
                       }
                     };
                     window.addEventListener('storage', handler);
@@ -399,17 +403,9 @@ export default function Settings({ user, token, onLogout }: { user: any, token: 
                       if (popup && popup.closed) {
                         clearInterval(pollTimer);
                         window.removeEventListener('storage', handler);
-                        const stored = localStorage.getItem('spotify_connected');
-                        if (stored) {
-                          try {
-                            const result = JSON.parse(stored);
-                            if (result.artists) {
-                              const newArtists = [...result.artists];
-                              while (newArtists.length < 5) newArtists.push('');
-                              setArtists(newArtists.slice(0, 5));
-                            }
-                          } catch(e) {}
+                        if (localStorage.getItem('spotify_connected')) {
                           localStorage.removeItem('spotify_connected');
+                          onSyncUser();
                         }
                       }
                     }, 500);
