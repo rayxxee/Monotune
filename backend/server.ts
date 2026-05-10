@@ -215,7 +215,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     console.log(`[EMAIL VERIFICATION] ${email} → ${verifyUrl}`);
     
     const token = jwt.sign({ id: user._id, username }, JWT_SECRET);
-    res.json({ token, user: { id: user._id, username, email, hasOnboarded: false, is_verified: false } });
+    res.json({ token, user: { id: user._id, username, email, hasOnboarded: false, is_verified: false, is_admin: user.is_admin } });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Registration failed.' });
   }
@@ -235,7 +235,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     }
     
     const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET);
-    res.json({ token, user: { id: user._id, username: user.username, email: user.email, hasOnboarded: user.top_artists.length > 0, is_verified: user.is_verified } });
+    res.json({ token, user: { id: user._id, username: user.username, email: user.email, hasOnboarded: user.top_artists.length > 0, is_verified: user.is_verified, is_admin: user.is_admin } });
   } catch (err: any) {
     res.status(500).json({ error: 'Login failed.' });
   }
