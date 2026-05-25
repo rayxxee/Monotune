@@ -55,6 +55,7 @@ export default function ForumFeed({ user, token, onSelectThread, onNavigateToPro
         formData.append('image', newImageFile);
         const uploadRes = await fetch('/api/upload', {
           method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
         if (!uploadRes.ok) throw new Error('Image upload failed');
@@ -64,7 +65,10 @@ export default function ForumFeed({ user, token, onSelectThread, onNavigateToPro
 
       const res = await fetch('/api/posts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           title: newTitle,
           content: newPost,

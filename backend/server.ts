@@ -451,21 +451,25 @@ const currentUserId = decoded.id;
 // --- TOXICITY MODERATION MIDDLEWARE ---
 const checkToxicity = async (text: string) => {
   try {
-    const response = await fetch('http://localhost:5000/predict', {
+    const response = await fetch('https://rayxxeee-toxic-classifier-api.hf.space/api/v1/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ texts: [text] })
     });
     
     if (!response.ok) return { is_toxic: false, score: 0 };
     
     const data = await response.json() as any;
-    return { 
-      is_toxic: data.prediction === 1 || data.is_toxic === true, 
-      score: data.probability || data.score || 0 
-    };
+    if (data.results && data.results.length > 0) {
+      const result = data.results[0];
+      return { 
+        is_toxic: result.label !== 'safe', 
+        score: result.probability || 0 
+      };
+    }
+    return { is_toxic: false, score: 0 };
   } catch (err) {
-    console.error('Toxicity API unreachable. Bypassing check for development.');
+    console.error('Toxicity API unreachable. Bypassing check.');
     return { is_toxic: false, score: 0 };
   }
 };
