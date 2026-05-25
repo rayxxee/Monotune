@@ -13,9 +13,19 @@ export default function ThreadDetail({ postId, user, token, onBack, onNavigateTo
   }, [postId]);
 
   const fetchThread = async () => {
-    const res = await fetch(`/api/posts/${postId}`);
-    const resData = await res.json();
-    setData(resData);
+    try {
+      const res = await fetch(`/api/posts/${postId}`);
+      const resData = await res.json();
+      if (!res.ok || resData.error) {
+        setError(resData.error || 'Failed to load thread');
+        setData(null);
+      } else {
+        setData(resData);
+      }
+    } catch (err) {
+      setError('Failed to fetch thread');
+      setData(null);
+    }
   };
 
   const handleComment = async (e: React.FormEvent) => {

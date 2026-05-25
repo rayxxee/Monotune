@@ -572,8 +572,8 @@ app.get('/api/posts/:id', async (req, res) => {
     const post = {
       ...postObj,
       id: postObj._id,
-      user_id: (postObj.user_id as any)._id,
-      username: (postObj.user_id as any).username,
+      user_id: (postObj.user_id as any)?._id || postObj.user_id,
+      username: (postObj.user_id as any)?.username || 'Unknown User',
       created_at: postObj.createdAt
     };
     
@@ -585,8 +585,8 @@ app.get('/api/posts/:id', async (req, res) => {
     const comments = commentsRaw.map(c => ({
       ...c,
       id: c._id,
-      user_id: (c.user_id as any)._id,
-      username: (c.user_id as any).username,
+      user_id: (c.user_id as any)?._id || c.user_id,
+      username: (c.user_id as any)?.username || 'Unknown User',
       created_at: c.createdAt
     }));
     
