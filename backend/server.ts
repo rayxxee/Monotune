@@ -577,7 +577,7 @@ app.get('/api/posts/:id', async (req, res) => {
       created_at: postObj.createdAt
     };
     
-    const commentsRaw = await Comment.find({ post_id: req.params.id, is_toxic: false })
+    const commentsRaw = await Comment.find({ post_id: req.params.id })
       .populate('user_id', 'username')
       .sort({ createdAt: 1 })
       .lean();
@@ -593,6 +593,63 @@ app.get('/api/posts/:id', async (req, res) => {
     res.json({ post, comments });
   } catch (err) {
     res.status(500).json({ error: 'Failed to sync with thread.' });
+  }
+});
+
+app.post('/api/posts/:id/comments', requireAuth, async (req: any, res) => {
+  try {
+    const { content } = req.body;
+    const postId = req.params.id;
+    const userId = req.userId;
+
+    if (!content) return res.status(400).json({ error: 'Content is required.' });
+
+    let isToxic = false;
+    let score = 0;
+    try {
+      const response = await fetch('https://rayxxeee-toxic-classifier-api.hf.space/api/v1/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts: [content] })
+      });
+      if (response.ok) {
+        const data = await response.json() as any;
+        if (data.results && data.results.length > 0) {
+          const result = data.results[0];
+          isToxic = result.label !== 'safe';
+          score = result.probability || 0;
+        }
+      }
+    } catch (err) {
+      console.error('Toxic comment API unreachable.', err);
+    }
+
+    let finalContent = content;
+    if (isToxic) {
+      finalContent = "deleted by ai for toxicity";
+    }
+
+    const comment = await Comment.create({
+      post_id: postId,
+      user_id: userId,
+      content: finalContent,
+      is_toxic: isToxic,
+      toxicity_score: score
+    });
+
+    const populatedComment = await Comment.findById(comment._id).populate('user_id', 'username').lean();
+
+    const formattedComment = {
+      ...populatedComment,
+      id: populatedComment?._id,
+      user_id: (populatedComment?.user_id as any)?._id,
+      username: (populatedComment?.user_id as any)?.username,
+      created_at: populatedComment?.createdAt
+    };
+
+    res.json(formattedComment);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create comment.' });
   }
 });
 
@@ -1218,9 +1275,22 @@ app.get('/api/auth/spotify', (req, res) => {
 app.get('/api/auth/spotify/callback', async (req, res) => {
   const code = req.query.code as string;
   const userId = req.query.state as string;
+  const spotifyError = req.query.error as string;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  // Handle Spotify-side errors (e.g., user denied access, or not whitelisted in dev mode)
+  if (spotifyError) {
+    console.error(`Spotify OAuth error: ${spotifyError}`);
+    const errorMsg = spotifyError === 'access_denied'
+      ? 'Access denied. You may need to be added to the Spotify app allowlist.'
+      : `Spotify authorization error: ${spotifyError}`;
+    const params = new URLSearchParams({ spotify: 'error', error: errorMsg });
+    return res.redirect(`${frontendUrl}/spotify-callback.html?${params.toString()}`);
+  }
 
   if (!code) {
-    return res.status(400).send('Missing authorization code from Spotify.');
+    const params = new URLSearchParams({ spotify: 'error', error: 'Missing authorization code from Spotify.' });
+    return res.redirect(`${frontendUrl}/spotify-callback.html?${params.toString()}`);
   }
 
   try {
@@ -1241,7 +1311,12 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
     const tokenData = await tokenRes.json() as any;
 
     if (!tokenData.access_token) {
-      return res.status(400).send('Failed to get access token from Spotify.');
+      console.error('Spotify token exchange failed:', tokenData);
+      const errorMsg = tokenData.error === 'invalid_grant'
+        ? 'Authorization code expired or invalid. Please try again.'
+        : 'Failed to get access token from Spotify. Ensure the app is properly configured.';
+      const params = new URLSearchParams({ spotify: 'error', error: errorMsg });
+      return res.redirect(`${frontendUrl}/spotify-callback.html?${params.toString()}`);
     }
 
     // Fetch user's top artists
@@ -1260,7 +1335,6 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
     }
 
     // Redirect to the frontend with success data as query params
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const params = new URLSearchParams({
       spotify: 'success',
       artists: JSON.stringify(artistNames),
@@ -1268,7 +1342,8 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
     res.redirect(`${frontendUrl}/spotify-callback.html?${params.toString()}`);
   } catch (err) {
     console.error('Spotify callback error:', err);
-    res.status(500).send('Spotify connection failed.');
+    const params = new URLSearchParams({ spotify: 'error', error: 'Spotify connection failed. Please try again.' });
+    res.redirect(`${frontendUrl}/spotify-callback.html?${params.toString()}`);
   }
 });
 
