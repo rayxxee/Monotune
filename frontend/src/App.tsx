@@ -176,7 +176,11 @@ export default function App() {
       const parsedUser = JSON.parse(savedUser);
       setToken(savedToken);
       setUser(parsedUser);
-      if (parsedUser.hasOnboarded) {
+      // Check onboarding: hasOnboarded flag, or actual artist data from API sync
+      const hasArtists = parsedUser.hasOnboarded || 
+        parsedUser.top_artist_1 || 
+        (parsedUser.top_artists && parsedUser.top_artists.length > 0);
+      if (hasArtists) {
         setStep('FEED');
       } else {
         setStep('ONBOARDING');
@@ -202,7 +206,9 @@ export default function App() {
       const res = await fetch(`/api/users/${user.id}`);
       if (res.ok) {
         const updatedUser = await res.json();
-        const mergedUser = { ...user, ...updatedUser };
+        const hasArtists = updatedUser.top_artist_1 || 
+          (updatedUser.top_artists && updatedUser.top_artists.length > 0);
+        const mergedUser = { ...user, ...updatedUser, hasOnboarded: user.hasOnboarded || hasArtists };
         setUser(mergedUser);
         localStorage.setItem('monutune_user', JSON.stringify(mergedUser));
       }
