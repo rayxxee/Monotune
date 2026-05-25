@@ -21,7 +21,7 @@ function ThreadDetailRoute({ user, token }: { user: any; token: string }) {
   return (
     <ErrorBoundary>
       <ThreadDetail
-        postId={Number(postId)}
+        postId={postId!}
         user={user}
         token={token}
         onBack={() => navigate('/feed')}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowLeft, Send, ArrowUp, ArrowDown } from 'lucide-react';
 
-export default function ThreadDetail({ postId, user, token, onBack, onNavigateToProfile }: { postId: number, user: any, token: string, onBack: () => void, onNavigateToProfile?: (id: string) => void }) {
+export default function ThreadDetail({ postId, user, token, onBack, onNavigateToProfile }: { postId: string, user: any, token: string, onBack: () => void, onNavigateToProfile?: (id: string) => void }) {
   const [data, setData] = useState<any>(null);
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
