@@ -82,6 +82,19 @@ export default function ThreadDetail({ postId, user, token, onBack, onNavigateTo
     } catch (err) {}
   };
 
+  if (error && !data) {
+    return (
+      <div className="flex-1 p-4 md:p-8 lg:p-12 overflow-y-auto bg-white flex flex-col items-center justify-center">
+         <div className="bg-white border-4 border-black p-8 flex flex-col items-center gap-4 text-center max-w-md">
+            <AlertCircle size={48} className="text-red-500" />
+            <h2 className="text-2xl font-black tracking-tighter uppercase">Signal Interrupted</h2>
+            <p className="font-bold text-xs uppercase opacity-50">{error}</p>
+            <button onClick={onBack} className="brutalist-button mt-4 px-8 py-3">GO BACK</button>
+         </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   return (
